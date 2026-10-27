@@ -1,0 +1,127 @@
+name: Release
+
+# Manual only: Actions -> Release -> Run workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without the leading v, e.g. 1.0.0. The tag will be v<version>."
+        required: true
+        type: string
+      draft:
+        description: "Create the release as a draft (review it before publishing)."
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and package (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            configure: cmake -S . -B build -A x64
+          - name: macOS
+            # Pinned to match build.yml; see the comment there.
+            os: macos-14
+            configure: cmake -S . -B build -G Xcode
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 15.4 (macOS)
+        if: runner.os == 'macOS'
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+
+      - name: Configure
+        run: ${{ matrix.configure }}
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      # A release is only built from a green test run.
+      - name: Run unit tests
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $staging = "staging"
+          New-Item -ItemType Directory -Force -Path $staging | Out-Null
+
+          # VST3 bundles are folders; Standalone builds are .exe files.
+          Get-ChildItem -Path build -Recurse |
+            Where-Object { $_.FullName -match '_artefacts[\\/]Release[\\/](VST3|Standalone)[\\/]' -and
+                           ($_.Name -like '*.vst3' -or $_.Name -like '*.exe') } |
+            ForEach-Object { Copy-Item -Path $_.FullName -Destination $staging -Recurse }
+
+          $count = (Get-ChildItem $staging).Count
+          if ($count -eq 0) { throw "No plugin artefacts found" }
+
+          Compress-Archive -Path "$staging/*" -DestinationPath "AudioPluginSuite-${{ inputs.version }}-windows.zip"
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          staging=staging
+          mkdir -p "$staging"
+
+          # VST3 and AU bundles are folders; Standalone builds are .app bundles.
+          find build/plugins -path "*_artefacts/Release/*" \
+            \( -name "*.vst3" -o -name "*.component" -o -name "*.app" \) -prune -print \
+            | while read -r item; do cp -R "$item" "$staging/"; done
+
+          if [ -z "$(ls -A "$staging")" ]; then
+            echo "No plugin artefacts found" >&2
+            exit 1
+          fi
+
+          (cd "$staging" && zip -r -q "../AudioPluginSuite-${{ inputs.version }}-macos.zip" .)
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ runner.os }}
+          path: AudioPluginSuite-${{ inputs.version }}-*.zip
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          path: packages
+          merge-multiple: true
+
+      - name: Create release and upload packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ inputs.version }}
+        run: |
+          draft_flag=""
+          if [ "${{ inputs.draft }}" = "true" ]; then draft_flag="--draft"; fi
+
+          gh release create "$TAG" packages/*.zip \
+            --target "$GITHUB_SHA" \
+            --title "Audio Plugin Suite $TAG" \
+            --generate-notes \
+            $draft_flag
