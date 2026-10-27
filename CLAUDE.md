@@ -64,7 +64,7 @@ Build status at the last check: full Release build succeeds on Windows; all 6 Co
 
 ## Open items
 
-- **License not chosen.** JUCE is GPLv3 or commercial, so the repo license must be compatible. The README marks it "TBD". Do not add a LICENSE file without asking.
+- **License: GPLv3** (`LICENSE` at repo root, official GNU text, unmodified). JUCE is used under its GPLv3 option. Closed-source distribution would need a commercial JUCE licence.
 - **GitHub owner/repo name unknown.** README badges and links use the placeholder `OWNER/REPO`. Replace them once the repository exists.
 - **No code signing or notarisation** (macOS plugins will need approval on first launch).
 - **Saturation has no oversampling.** Aliasing is expected at high drive.

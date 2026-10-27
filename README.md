@@ -1,11 +1,11 @@
 # Audio Plugin Suite
 
-[![Build](https://github.com/OWNER/REPO/actions/workflows/build.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/build.yml)
+[![Build](https://github.com/tfroehlich82/AudioPluginSuite/actions/workflows/build.yml/badge.svg)](https://github.com/tfroehlich82/AudioPluginSuite/actions/workflows/build.yml)
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white)
 ![JUCE](https://img.shields.io/badge/JUCE-7.0.9-8A2BE2)
 ![Formats](https://img.shields.io/badge/formats-VST3%20%7C%20AU%20%7C%20Standalone-informational)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS-lightgrey)
-![License](https://img.shields.io/badge/license-TBD-orange)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 Three creative audio plugins built with [JUCE](https://juce.com) and C++17: an FFT phase-drift processor, a dynamic saturation stage, and a chaos-driven MIDI micro-timing sequencer. Every plugin ships with its own dark, neon-accented interface and real-time visualisers.
 
@@ -44,7 +44,7 @@ Three creative audio plugins built with [JUCE](https://juce.com) and C++17: an F
 
 ### Installation
 
-Download the latest build from the [Releases](https://github.com/OWNER/REPO/releases) page, or [build it yourself](#building).
+Download the latest build from the [Releases](https://github.com/tfroehlich82/AudioPluginSuite/releases) page, or [build it yourself](#building).
 
 Copy the plugin bundles to your system plugin folder:
 
@@ -132,7 +132,7 @@ No separate JUCE install is needed. The version is pinned in the root [`CMakeLis
 **Windows (Visual Studio, x64):**
 
 ```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+cmake -S . -B build -A x64
 cmake --build build --config Release --parallel
 ```
 
@@ -249,7 +249,7 @@ Key decisions:
 
 [`build.yml`](.github/workflows/build.yml) runs on every push and pull request to `main`:
 
-1. Configures with CMake on `windows-latest` (VS 2022, x64) and `macos-latest` (Xcode).
+1. Configures with CMake on `windows-latest` (newest installed Visual Studio, x64) and `macos-latest` (Xcode).
 2. Builds the whole suite in Release.
 3. Runs `ctest`.
 4. Uploads the VST3 bundles as build artifacts.
@@ -286,9 +286,9 @@ Issues and pull requests are welcome. Before opening a pull request:
 
 ## License
 
-**To be decided.** No license file has been added yet.
+This project is licensed under the **GNU General Public License v3.0**. See [LICENSE](LICENSE) for the full text.
 
-This project links JUCE, which is available under the GPLv3 or a commercial licence from its vendor. The license for this repository must be compatible with how JUCE is used; check the [JUCE licensing terms](https://juce.com/juce-7-licence/) before publishing binaries.
+The project builds on JUCE, which is available under the GPLv3 or a commercial licence from its vendor. Because this project is GPLv3, JUCE is used under its GPLv3 option. If you distribute closed-source builds, you will need a commercial JUCE licence instead; see the [JUCE licensing terms](https://juce.com/juce-7-licence/).
 
 ---
 

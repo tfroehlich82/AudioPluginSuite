@@ -17,7 +17,9 @@ jobs:
         include:
           - name: Windows MSVC
             os: windows-latest
-            configure: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+            # No -G: CMake picks the newest Visual Studio installed on the runner.
+            # Pinning a year breaks whenever GitHub updates the runner image.
+            configure: cmake -S . -B build -A x64
           - name: macOS Xcode
             os: macos-latest
             configure: cmake -S . -B build -G Xcode
