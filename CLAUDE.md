@@ -65,7 +65,7 @@ Build status at the last check: full Release build succeeds on Windows; all 6 Co
 ## Open items
 
 - **License: GPLv3** (`LICENSE` at repo root, official GNU text, unmodified). JUCE is used under its GPLv3 option. Closed-source distribution would need a commercial JUCE licence.
-- **GitHub owner/repo name unknown.** README badges and links use the placeholder `OWNER/REPO`. Replace them once the repository exists.
+- **GitHub repo:** `https://github.com/tfroehlich82/AudioPluginSuite` (origin remote). README badges and links point there.
 - **CI macOS job is pinned to `macos-14` with Xcode 15.4.** `macos-latest` failed to compile JUCE 7.0.9's `juce_gui_basics.mm` while building `juceaide`. The cause is unconfirmed. If the pin fails, try JUCE 7.0.12 (patch release, same API).
 - **No code signing or notarisation** (macOS plugins will need approval on first launch).
 - **Saturation has no oversampling.** Aliasing is expected at high drive.
