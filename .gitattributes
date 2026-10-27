@@ -1,0 +1,10 @@
+# Normalise line endings in the repository; check out with the platform's endings.
+* text=auto eol=lf
+
+# Windows project files and binaries stay as-is.
+*.sln binary
+*.vcxproj text eol=crlf
+*.png binary
+*.jpg binary
+*.wav binary
+*.vst3 binary

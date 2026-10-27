@@ -1,0 +1,29 @@
+# Build output
+build/
+cmake-build-*/
+out/
+*.o
+*.obj
+*.exe
+*.pdb
+*.ilk
+
+# Plugin bundles and JUCE generated files
+*.vst3
+*.component
+*.aax
+*.app
+JuceLibraryCode/
+
+# IDE and editor state
+.vs/
+.idea/
+*.user
+*.suo
+*.sln.docstates
+.DS_Store
+Thumbs.db
+
+# Note: .vscode/ is ignored by the original project setup. Remove this line
+# to share editor settings such as tasks.json with the team.
+.vscode/
