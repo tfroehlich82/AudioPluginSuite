@@ -4,30 +4,53 @@
 
 #include <array>
 #include <atomic>
+#include <cstdint>
 
 #include "SpectralEngine.h"
 
 /**
     Spectral Drift Shifter.
 
-    FFT overlap-add processing with an LFO that drifts the phase of every bin.
-    The left and right channels run on quadrature LFOs, which decorrelates them and widens the image.
+    FFT overlap-add processing with an LFO that drifts the phase of every bin, plus spectral
+    shaping (shift, tilt, gate). The channels run on LFOs offset by the Stereo Phase control,
+    which decorrelates them and widens the image.
 */
 class SpectralDriftProcessor : public juce::AudioProcessor
 {
 public:
     static constexpr int numBins = CoreDSP::Spectral::numBins;
 
+    // Drift and mix
     static constexpr const char* driftRateId = "driftRate";
-    static constexpr const char* freezeId = "freeze";
-    static constexpr const char* mixId = "mix";
+    static constexpr const char* depthId = "depth";
+    static constexpr const char* spreadId = "spread";
+    static constexpr const char* stereoPhaseId = "stereoPhase";
+    static constexpr const char* lfoShapeId = "lfoShape";
+
+    // Spectral shaping
+    static constexpr const char* shiftId = "shift";
+    static constexpr const char* tiltId = "tilt";
+    static constexpr const char* gateId = "gate";
+
+    // Feedback and freeze
     static constexpr const char* feedbackId = "feedback";
+    static constexpr const char* mixId = "mix";
+    static constexpr const char* freezeId = "freeze";
+    static constexpr const char* feedbackDampingId = "feedbackDamping";
+    static constexpr const char* driftStartId = "driftStart";
+    static constexpr const char* outputGainId = "outputGain";
+
+    static constexpr int numControls = 14;
+
+    /** Largest feedback the plugin allows. The engine itself can go to 0.95. */
+    static constexpr float maxFeedbackPercent = 12.0f;
 
     /** Spectra published for the editor. Written on the audio thread, read on the message thread. */
     struct SpectrumSnapshot
     {
         std::array<std::atomic<float>, numBins> input {};
         std::array<std::atomic<float>, numBins> output {};
+        std::atomic<std::uint64_t> frames { 0 };
     };
 
     SpectralDriftProcessor();
@@ -62,13 +85,24 @@ public:
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-    std::array<CoreDSP::Spectral::DriftEngine, 2> engines { CoreDSP::Spectral::DriftEngine (0.0f),
-                                                            CoreDSP::Spectral::DriftEngine (juce::MathConstants<float>::halfPi) };
+    void readSettings (CoreDSP::Spectral::DriftEngine::Settings& settings) const noexcept;
+
+    std::array<CoreDSP::Spectral::DriftEngine, 2> engines;
 
     std::atomic<float>* driftRate = nullptr;
-    std::atomic<float>* freeze = nullptr;
-    std::atomic<float>* mix = nullptr;
+    std::atomic<float>* depth = nullptr;
+    std::atomic<float>* spread = nullptr;
+    std::atomic<float>* stereoPhase = nullptr;
+    std::atomic<float>* lfoShape = nullptr;
+    std::atomic<float>* shift = nullptr;
+    std::atomic<float>* tilt = nullptr;
+    std::atomic<float>* gate = nullptr;
     std::atomic<float>* feedback = nullptr;
+    std::atomic<float>* mix = nullptr;
+    std::atomic<float>* freeze = nullptr;
+    std::atomic<float>* feedbackDamping = nullptr;
+    std::atomic<float>* driftStart = nullptr;
+    std::atomic<float>* outputGain = nullptr;
 
     SpectrumSnapshot snapshot;
 
