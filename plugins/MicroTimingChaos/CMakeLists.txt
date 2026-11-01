@@ -12,6 +12,10 @@ juce_add_plugin(MicroTimingChaos
     NEEDS_MIDI_OUTPUT TRUE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     COPY_PLUGIN_AFTER_BUILD FALSE
+    PLUGIN_RESOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Resources"
+    PLUGIN_RESOURCE_FILES
+        "Resources/icons/*.svg"
+        "Resources/textures/*.png"
 )
 
 target_sources(MicroTimingChaos PRIVATE
@@ -19,6 +23,8 @@ target_sources(MicroTimingChaos PRIVATE
     Source/PluginProcessor.h
     Source/PluginEditor.cpp
     Source/PluginEditor.h
+    Source/LerpCurveEditor.cpp
+    Source/MicroTimingChaosLookAndFeel.cpp
 )
 
 suite_ui_add_to_target(MicroTimingChaos)
