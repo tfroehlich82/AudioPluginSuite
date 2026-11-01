@@ -48,7 +48,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout MicroTimingChaosProcessor::c
     params.push_back (std::make_unique<AudioParameterFloat> (
         ParameterID { gateId, 1 }, "Gate", NormalisableRange<float> (10.0f, 100.0f, 0.1f), 60.0f, "%"));
     params.push_back (std::make_unique<AudioParameterFloat> (
-        ParameterID { swingId, 1 }, "Swing", NormalisableRange<float> (0.0f, 50.0f, 0.1f), 0.0f, "%"));
+        ParameterID { swingId, 1 }, "Swing", NormalisableRange<float> (-20.0f, 20.0f, 0.1f), 0.0f, "%"));
     params.push_back (std::make_unique<AudioParameterInt> (ParameterID { baseVelocityId, 1 }, "Velocity", 30, 127, 100));
 
     // Melody
@@ -66,7 +66,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout MicroTimingChaosProcessor::c
     params.push_back (std::make_unique<AudioParameterFloat> (
         ParameterID { velocityChaosId, 1 }, "Velocity Chaos", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 40.0f, "%"));
     params.push_back (std::make_unique<AudioParameterFloat> (
-        ParameterID { speedId, 1 }, "Chaos Speed", NormalisableRange<float> (0.05f, 2.0f, 0.001f, 0.5f), 0.5f, "/beat"));
+        ParameterID { speedId, 1 }, "Chaos Speed", NormalisableRange<float> (0.0f, 0.5f, 0.001f, 0.5f), 0.5f, "/beat"));
 
     // Transport
     params.push_back (std::make_unique<AudioParameterFloat> (

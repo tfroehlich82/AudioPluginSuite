@@ -50,10 +50,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout DynamicSaturationProcessor::
 
     // Extended controls
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID { attackId, 1 }, "Attack", juce::NormalisableRange<float> (0.1f, 50.0f, 0.01f, 0.35f), 5.0f, "ms"));
+        juce::ParameterID { attackId, 1 }, "Attack", juce::NormalisableRange<float> (1.0f, 100.0f, 0.01f, 0.35f), 5.0f, "ms"));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID { releaseId, 1 }, "Release", juce::NormalisableRange<float> (10.0f, 1000.0f, 0.1f, 0.4f), 150.0f, "ms"));
+        juce::ParameterID { releaseId, 1 }, "Release", juce::NormalisableRange<float> (50.0f, 2000.0f, 0.1f, 0.4f), 150.0f, "ms"));
 
     // Log sweep, so a 100 Hz step is as big as a 400 Hz one.
     const juce::NormalisableRange<float> hpfRange (
@@ -68,16 +68,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout DynamicSaturationProcessor::
         juce::ParameterID { stereoLinkId, 1 }, "Stereo Link", juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 100.0f, "%"));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID { biasId, 1 }, "Tube Bias", juce::NormalisableRange<float> (0.0f, 0.5f, 0.001f), CoreDSP::Saturation::defaultTubeBias));
+        juce::ParameterID { biasId, 1 }, "Tube Bias", juce::NormalisableRange<float> (0.0f, 0.25f, 0.001f), CoreDSP::Saturation::defaultTubeBias));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID { foldId, 1 }, "Fold", juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f, "%"));
+        juce::ParameterID { foldId, 1 }, "Fold", juce::NormalisableRange<float> (0.0f, 50.0f, 0.1f), 0.0f, "%"));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { toneId, 1 }, "Tone", juce::NormalisableRange<float> (-1.0f, 1.0f, 0.001f), 0.0f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID { curveId, 1 }, "Envelope Curve", juce::NormalisableRange<float> (0.5f, 2.0f, 0.001f), 1.0f));
+        juce::ParameterID { curveId, 1 }, "Envelope Curve", juce::NormalisableRange<float> (0.5f, 3.0f, 0.001f), 1.0f));
 
     return { params.begin(), params.end() };
 }

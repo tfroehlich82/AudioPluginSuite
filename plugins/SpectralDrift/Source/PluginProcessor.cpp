@@ -45,7 +45,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpectralDriftProcessor::crea
         juce::ParameterID { depthId, 1 }, "Drift Depth", juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), defaultDepthPercent, "%"));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID { spreadId, 1 }, "Bin Spread", juce::NormalisableRange<float> (0.0f, 0.5f, 0.001f), CoreDSP::Spectral::defaultBinSpread, "rad"));
+        juce::ParameterID { spreadId, 1 }, "Bin Spread", juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), CoreDSP::Spectral::defaultBinSpread, "rad"));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { stereoPhaseId, 1 }, "Stereo Phase", juce::NormalisableRange<float> (0.0f, 180.0f, 0.1f), 90.0f, "deg"));
@@ -54,16 +54,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpectralDriftProcessor::crea
         juce::ParameterID { lfoShapeId, 1 }, "LFO Shape", juce::StringArray { "Sine", "Triangle", "Saw", "Square" }, 0));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID { shiftId, 1 }, "Spectral Shift", juce::NormalisableRange<float> (-16.0f, 16.0f, 0.01f), 0.0f, "bins"));
+        juce::ParameterID { shiftId, 1 }, "Spectral Shift", juce::NormalisableRange<float> (-32.0f, 32.0f, 0.01f), 0.0f, "bins"));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID { tiltId, 1 }, "Spectral Tilt", juce::NormalisableRange<float> (-1.0f, 1.0f, 0.001f), 0.0f));
+        juce::ParameterID { tiltId, 1 }, "Spectral Tilt", juce::NormalisableRange<float> (-2.0f, 2.0f, 0.001f), 0.0f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { gateId, 1 }, "Spectral Gate", juce::NormalisableRange<float> (CoreDSP::Spectral::gateOffDb, 0.0f, 0.1f), CoreDSP::Spectral::gateOffDb, "dB"));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID { feedbackId, 1 }, "Feedback", juce::NormalisableRange<float> (0.0f, maxFeedbackPercent, 0.01f), 0.0f, "%"));
+        juce::ParameterID { feedbackId, 1 }, "Feedback", juce::NormalisableRange<float> (0.0f, 20.0f, 0.01f), 0.0f, "%"));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID { mixId, 1 }, "Mix", juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 100.0f, "%"));
