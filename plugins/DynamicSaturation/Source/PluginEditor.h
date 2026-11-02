@@ -4,6 +4,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <memory>
+#include <vector>
 
 #include "PluginProcessor.h"
 #include "SuiteLookAndFeel.h"
@@ -31,15 +32,23 @@ private:
     SuiteUI::LevelMeter inputMeter { juce::Colour (0xffff9f1c) };
     SuiteUI::SegmentedSelector modeSelector { juce::Colour (0xffff9f1c) };
 
+    // Row 1: drive and dynamics
     SuiteUI::LabelledSlider driveSlider { "DRIVE", juce::Slider::RotaryVerticalDrag };
     SuiteUI::LabelledSlider sensitivitySlider { "SENSITIVITY", juce::Slider::RotaryVerticalDrag };
+    SuiteUI::LabelledSlider curveSlider { "CURVE", juce::Slider::RotaryVerticalDrag };
+    SuiteUI::LabelledSlider attackSlider { "ATTACK", juce::Slider::RotaryVerticalDrag };
+    SuiteUI::LabelledSlider releaseSlider { "RELEASE", juce::Slider::RotaryVerticalDrag };
     SuiteUI::LabelledSlider mixSlider { "MIX", juce::Slider::RotaryVerticalDrag };
+
+    // Row 2: detector, character and output
+    SuiteUI::LabelledSlider detectHpfSlider { "DETECT HPF", juce::Slider::RotaryVerticalDrag };
+    SuiteUI::LabelledSlider stereoLinkSlider { "STEREO LINK", juce::Slider::RotaryVerticalDrag };
+    SuiteUI::LabelledSlider biasSlider { "TUBE BIAS", juce::Slider::RotaryVerticalDrag };
+    SuiteUI::LabelledSlider foldSlider { "FOLD", juce::Slider::RotaryVerticalDrag };
+    SuiteUI::LabelledSlider toneSlider { "TONE", juce::Slider::RotaryVerticalDrag };
     SuiteUI::LabelledSlider outputSlider { "OUTPUT", juce::Slider::RotaryVerticalDrag };
 
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> driveAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> sensitivityAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> mixAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> outputAttachment;
+    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> sliderAttachments;
     std::unique_ptr<juce::ParameterAttachment> modeAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (DynamicSaturationEditor)

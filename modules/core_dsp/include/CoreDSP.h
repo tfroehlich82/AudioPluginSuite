@@ -11,6 +11,7 @@
 
 #include "ChaosEngine.h"
 #include "SaturationEngine.h"
+#include "SequencerEngine.h"
 #include "SpectralEngine.h"
 
 namespace CoreDSP
