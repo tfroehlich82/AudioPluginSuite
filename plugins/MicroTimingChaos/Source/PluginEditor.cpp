@@ -15,7 +15,8 @@ namespace
     constexpr int rightColumnGap = 14;
     constexpr int patternGroupHeight = knobRowHeight * 2 + groupTitleHeight + 12;
     constexpr int melodyChaosGroupHeight = knobRowHeight + groupTitleHeight + 12;
-    constexpr int lerpGroupHeight = 348;
+    // The lerp group grows with the window, from 348 px. Its knobs keep the fixed size below.
+    constexpr int lerpKnobsHeight = 318;
     constexpr int transportGroupHeight = knobRowHeight + groupTitleHeight + 12;
     constexpr int modulationGroupHeight = 240;
     constexpr int modulationGroupWidth = 490;
@@ -377,10 +378,10 @@ void MicroTimingChaosEditor::resized()
     melodyChaos.removeFromLeft (groupGap);
     auto chaosGroup = melodyChaos;
 
-    auto lerpGroup = right.removeFromTop (lerpGroupHeight);
-    right.removeFromTop (groupGap);
-
-    auto transportGroup = right.removeFromTop (transportGroupHeight);
+    // Transport is fixed at the bottom. The lerp group takes the height in between.
+    auto transportGroup = right.removeFromBottom (transportGroupHeight);
+    right.removeFromBottom (groupGap);
+    auto lerpGroup = right;
 
     groups.push_back ({ "PATTERN", patternGroup });
     groups.push_back ({ "MELODY", melodyGroup });
@@ -413,8 +414,10 @@ void MicroTimingChaosEditor::resized()
     velocityChaosSlider.setBounds (chaosCells[2]);
 
     // Lerp curve: the tabbed view on the left, the lerp and multipliers on the right
+    // The knobs keep a fixed size, at the top of the group. The curve editor fills the rest.
     auto lerpInner = innerOf (lerpGroup);
-    auto lerpKnobs = lerpInner.removeFromRight (juce::roundToInt ((float) lerpInner.getWidth() * 0.36f));
+    auto lerpKnobs = lerpInner.removeFromRight (juce::roundToInt ((float) lerpInner.getWidth() * 0.36f))
+                              .withHeight (lerpKnobsHeight);
     lerpViewSelector.setBounds (lerpInner.removeFromTop (26).withWidth (210));
     lerpInner.removeFromTop (6);
     curveEditor.setBounds (lerpInner);

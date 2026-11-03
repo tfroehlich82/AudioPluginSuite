@@ -312,7 +312,7 @@ Mouse events in tests use the 15-argument `juce::MouseEvent` constructor of JUCE
 - **Modulation applies before the lerp curve**, so a modulated Chaos moves along the curve.
 - **The routing and LFO settings are plain APVTS parameters**, so they automate, save and restore like the rest.
 - **The LFO panel sits at the bottom of the left column, and the window is 980 px tall.** The plan's right-column option left the lerp curve about 100 px high.
-- **Editor sizing.** Only the attractor and the step grid resize with the window. The right column (664 px wide, group heights fixed), the lerp group (348 px), and the modulation panel (490 × 240) keep fixed sizes. The minimum window is 1200 × 980.
+- **Editor sizing.** The attractor, the step grid and the lerp curve grow with the window. The right column is 664 px wide and its pattern, melody/chaos and transport groups keep fixed heights. The lerp group is at least 348 px tall and grows taller; its four knobs keep a fixed 318 px block at the top. The modulation panel (490 × 240) keeps a fixed size. The minimum window is 1200 × 980.
 - **Spectral Drift preview:** the old panel was blank because, with no audio, the traces sat at the −120 dB floor. The fix adds a "Waiting for audio" state (shown until frames and input energy arrive) and frequency labels. A regression test checks that a 1 kHz tone reaches the snapshot at bin 43.
 
 ---
