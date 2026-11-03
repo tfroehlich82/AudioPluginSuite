@@ -68,6 +68,28 @@ Each drift is then applied to its axis: the timing offset, the blend between the
 - The BPM Sync button shows an icon, with a texture overlay and an ON or OFF state.
 - Hover any control to see what it does in the help line at the bottom.
 
+## LFO and Modulation
+
+Two LFOs, each with a rate, a shape and a sync switch, and four routing slots. A slot sends one LFO to one control, with a signed amount.
+
+| Control | Range | Default | Description |
+|---|---|---|---|
+| **LFO Rate** | 0.02 – 20 Hz (logarithmic) | 0.25 Hz | How fast the LFO cycles. Disabled while its Sync is on. |
+| **LFO Shape** | Sine, Triangle, Saw, Square, Sample & Hold | Sine | The waveform. Sample & Hold picks a new random level on each cycle. |
+| **LFO Sync** | on / off | off | Locks the LFO to musical time. |
+| **LFO Division** | 4 bars, 2 bars, 1 bar, 1/2, 1/4, 1/8, 1/16 | 1/4 | The cycle length while synced. |
+| **Mod Source** | LFO 1, LFO 2 | LFO 1 | Which LFO drives the slot. |
+| **Mod Target** | see the list below | None | The control the slot moves. None turns the slot off. |
+| **Mod Amount** | −100 to +100 % | 0 % | How far the target moves. Negative values invert the LFO. |
+
+**Targets:** Chaos, Timing Range, Velocity Chaos, Lerp, Lerp X Mult, Lerp Y Mult, Lerp Z Mult, Density, Gate, Swing, Velocity, Speed, and Tempo. Tempo only moves while Host Sync is off. Rate, Length, Seed, Scale, Root Note, Octaves and Host Sync are not modulation targets.
+
+**How it works.** An amount of 100 % sweeps the whole range of the target, so a log or bipolar control behaves the same way. Chaos is modulated before the lerp curve, so a modulated Chaos moves along the curve. With no slot aimed at a control, nothing changes.
+
+**Example.** LFO 1 synced to 1 bar, Sine, routed to Timing Range at +50 % gives a timing sweep once per bar.
+
+The panel shows each LFO's waveform, with a dot at the position it is at now.
+
 ## Latency
 
 The plugin reports a fixed latency of 50 ms, which is the largest timing range. It does not change when Timing Range changes, so the host's delay compensation stays steady during a session.

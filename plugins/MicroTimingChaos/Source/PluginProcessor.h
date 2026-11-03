@@ -53,7 +53,52 @@ public:
     static constexpr const char* syncId = "sync";
     static constexpr const char* speedId = "speed";
 
-    static constexpr int numControls = 20;
+    // LFO 1 and LFO 2
+    static constexpr const char* lfo1RateId = "lfo1Rate";
+    static constexpr const char* lfo1ShapeId = "lfo1Shape";
+    static constexpr const char* lfo1SyncId = "lfo1Sync";
+    static constexpr const char* lfo1DivisionId = "lfo1Division";
+    static constexpr const char* lfo2RateId = "lfo2Rate";
+    static constexpr const char* lfo2ShapeId = "lfo2Shape";
+    static constexpr const char* lfo2SyncId = "lfo2Sync";
+    static constexpr const char* lfo2DivisionId = "lfo2Division";
+
+    // Modulation routing: four slots, each with a source, a target and a signed amount
+    static constexpr const char* modSourceIds[4] = { "mod1Source", "mod2Source", "mod3Source", "mod4Source" };
+    static constexpr const char* modTargetIds[4] = { "mod1Target", "mod2Target", "mod3Target", "mod4Target" };
+    static constexpr const char* modAmountIds[4] = { "mod1Amount", "mod2Amount", "mod3Amount", "mod4Amount" };
+
+    static constexpr int numControls = 40;
+    static constexpr int lfoCount = 2;
+    static constexpr int slotCount = 4;
+
+    /** Fixed seeds for the sample and hold shape, one per LFO, so the random sequence is the same every time. */
+    static constexpr std::array<std::uint32_t, lfoCount> lfoSeeds { 0x51A5u, 0x7B3Du };
+
+    /**
+        The parameters that an LFO can move. The order is part of the saved session: append new
+        targets at the end, and never reorder or remove existing ones. Names come from modTargetNames().
+    */
+    enum class ModTarget
+    {
+        None = 0,
+        Chaos,
+        TimingRange,
+        VelocityChaos,
+        Lerp,
+        LerpX,
+        LerpY,
+        LerpZ,
+        Density,
+        Gate,
+        Swing,
+        Velocity,
+        Speed,
+        Tempo,
+        count
+    };
+
+    static juce::StringArray modTargetNames();
 
     /** Timing range is at most this large, and the plugin reports this much latency. */
     static constexpr double maxTimingRangeMs = 50.0;
@@ -146,8 +191,31 @@ public:
     /** The tempo in use: the host tempo when Host Sync is on and the host reports one, otherwise the Tempo parameter. */
     double getDisplayBpm() const;
 
+    /** The LFO output (-1 to 1) at the most recent block start. */
+    float getLfoValue (int lfoIndex) const noexcept;
+
+    /** The LFO position within its cycle (0 to 1) at the most recent block start. */
+    float getLfoPhase (int lfoIndex) const noexcept;
+
+    /** The offset (normalised, -1 to 1) that the routing currently adds to a target. */
+    float getTargetOffset (ModTarget target) const noexcept;
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
+    using TargetOffsets = std::array<float, (size_t) ModTarget::count>;
+
+    /** Cycles elapsed for an LFO at a sample time (free) or a beat (synced), before the shape is applied. */
+    double lfoCyclesAt (int lfoIndex, double timeSamples, double beat) const;
+
+    /** Sums every routing slot into one offset per target, for a sample time and beat. */
+    TargetOffsets computeOffsets (double timeSamples, double beat) const;
+
+    /** Applies an offset to a parameter's base value, in the parameter's own normalised range. Exact when the offset is zero. */
+    float modulatedValue (ModTarget target, float base, const TargetOffsets& offsets) const;
+
+    /** The routing target parameter for each ModTarget (nullptr for None). */
+    std::array<juce::RangedAudioParameter*, (size_t) ModTarget::count> targetParams {};
 
     void loadLerpCurveFromState();
     void storeLerpCurveToState();
@@ -169,10 +237,9 @@ private:
 
     using Queue = std::multimap<std::int64_t, juce::MidiMessage>;
 
-    double currentBpm (const juce::Optional<juce::AudioPlayHead::PositionInfo>& position) const;
+    double currentBpm (const juce::Optional<juce::AudioPlayHead::PositionInfo>& position, float freeTempo) const;
     void advanceAttractorTo (double beat, double speed);
-    void scheduleStep (std::int64_t stepIndex, double stepBeat, double blockStartBeat, double samplesPerBeat,
-                       float chaos, float timingRangeMs, float speed);
+    void scheduleStep (std::int64_t stepIndex, double stepBeat, double blockStartBeat, double samplesPerBeat);
     std::int64_t queueNoteOn (int note, int velocity, std::int64_t target);
     void queueNoteOff (int note, std::int64_t target);
     void publishTrailPoint() noexcept;
@@ -220,6 +287,20 @@ private:
     std::atomic<float>* bpm = nullptr;
     std::atomic<float>* sync = nullptr;
     std::atomic<float>* speed = nullptr;
+
+    std::array<std::atomic<float>*, lfoCount> lfoRate {};
+    std::array<std::atomic<float>*, lfoCount> lfoShape {};
+    std::array<std::atomic<float>*, lfoCount> lfoSync {};
+    std::array<std::atomic<float>*, lfoCount> lfoDivision {};
+    std::array<std::atomic<float>*, slotCount> modSource {};
+    std::array<std::atomic<float>*, slotCount> modTarget {};
+    std::array<std::atomic<float>*, slotCount> modAmount {};
+
+    // LFO state. The free LFOs accumulate cycles across blocks, so changing the rate never jumps the phase.
+    std::array<double, lfoCount> lfoCycles {};
+    std::array<std::atomic<float>, lfoCount> lfoPublishedValue {};
+    std::array<std::atomic<float>, lfoCount> lfoPublishedPhase {};
+    std::array<std::atomic<float>, (size_t) ModTarget::count> targetOffsetPublished {};
 
     TrailSnapshot trail;
     std::array<LogSlot, logLength> log;

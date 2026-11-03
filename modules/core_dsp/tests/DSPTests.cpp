@@ -795,6 +795,84 @@ namespace
         std::puts ("[PASS] testSpectralFeedbackDampingAndDriftStart");
     }
 
+    //==============================================================================
+    // Modulation (LFO shapes, sample and hold, modulation maths)
+
+    void testModulationShapes()
+    {
+        namespace Mod = CoreDSP::Modulation;
+        constexpr std::uint32_t seed = 0x51A5;
+
+        // Sine: 0 at the start, +1 a quarter of the way, -1 at three quarters.
+        assert (std::abs (Mod::lfoValue (Mod::LfoShape::sine, 0.0, seed)) < 1e-6f);
+        assert (std::abs (Mod::lfoValue (Mod::LfoShape::sine, 0.25, seed) - 1.0f) < 1e-5f);
+        assert (std::abs (Mod::lfoValue (Mod::LfoShape::sine, 0.75, seed) + 1.0f) < 1e-5f);
+
+        // Triangle: starts at -1, peaks at +1 at the half cycle, linear in between.
+        assert (std::abs (Mod::lfoValue (Mod::LfoShape::triangle, 0.0, seed) + 1.0f) < 1e-6f);
+        assert (std::abs (Mod::lfoValue (Mod::LfoShape::triangle, 0.5, seed) - 1.0f) < 1e-6f);
+        assert (std::abs (Mod::lfoValue (Mod::LfoShape::triangle, 0.25, seed)) < 1e-6f);
+
+        // Saw: rises from -1 towards +1.
+        assert (std::abs (Mod::lfoValue (Mod::LfoShape::saw, 0.0, seed) + 1.0f) < 1e-6f);
+        assert (Mod::lfoValue (Mod::LfoShape::saw, 0.999, seed) > 0.99f);
+
+        // Square: +1 in the first half cycle, -1 in the second.
+        assert (Mod::lfoValue (Mod::LfoShape::square, 0.25, seed) == 1.0f);
+        assert (Mod::lfoValue (Mod::LfoShape::square, 0.75, seed) == -1.0f);
+
+        // Every shape stays in [-1, 1], also for negative and large cycle counts.
+        for (int shape = 0; shape <= 4; ++shape)
+            for (double c = -5.0; c < 5.0; c += 0.01)
+            {
+                const float v = Mod::lfoValue ((Mod::LfoShape) shape, c, seed);
+                assert (v >= -1.0f - 1e-6f && v <= 1.0f + 1e-6f);
+            }
+
+        // Whole cycles do not change the waveform (checked for the shapes that do not depend on the cycle index).
+        for (int shape = 0; shape <= 3; ++shape)
+            for (double c = 0.013; c < 1.0; c += 0.05) // offset away from the square edge at 0.5
+                assert (std::abs (Mod::lfoValue ((Mod::LfoShape) shape, c, seed) - Mod::lfoValue ((Mod::LfoShape) shape, c + 3.0, seed)) < 1e-5f);
+
+        // modulatedNormalised clamps to [0, 1] and is the identity for a zero offset.
+        assert (Mod::modulatedNormalised (0.3f, 0.0f) == 0.3f);
+        assert (Mod::modulatedNormalised (0.5f, 0.3f) == 0.8f);
+        assert (Mod::modulatedNormalised (1.5f, -0.5f) == 1.0f);
+        assert (std::abs (Mod::modulatedNormalised (-0.5f, 0.6f) - 0.1f) < 1e-6f);
+        assert (Mod::modulatedNormalised (-0.5f, -0.6f) == 0.0f);
+
+        std::puts ("[PASS] testModulationShapes");
+    }
+
+    void testSampleAndHold()
+    {
+        namespace Mod = CoreDSP::Modulation;
+        constexpr std::uint32_t seed = 0x51A5;
+
+        // Constant within a cycle, and deterministic.
+        const float first = Mod::lfoValue (Mod::LfoShape::sampleAndHold, 4.1, seed);
+        assert (first == Mod::lfoValue (Mod::LfoShape::sampleAndHold, 4.9, seed));
+        assert (first == Mod::lfoValue (Mod::LfoShape::sampleAndHold, 4.1, seed));
+
+        // Changes at most cycle boundaries, and stays in range.
+        int changes = 0;
+        float previous = Mod::lfoValue (Mod::LfoShape::sampleAndHold, 0.5, seed);
+        for (int cycle = 1; cycle <= 8; ++cycle)
+        {
+            const float value = Mod::lfoValue (Mod::LfoShape::sampleAndHold, cycle + 0.5, seed);
+            assert (value >= -1.0f && value <= 1.0f);
+            if (value != previous)
+                ++changes;
+            previous = value;
+        }
+        assert (changes >= 6);
+
+        // A different seed gives a different sequence.
+        assert (Mod::lfoValue (Mod::LfoShape::sampleAndHold, 3.5, seed) != Mod::lfoValue (Mod::LfoShape::sampleAndHold, 3.5, 0x7B3D));
+
+        std::puts ("[PASS] testSampleAndHold");
+    }
+
 int main()
 {
     std::puts ("Running CoreDSP unit tests...");
@@ -825,6 +903,8 @@ int main()
     testScalesAndPitch();
     testBlendDegree();
     testTimingSwingGateVelocity();
+    testModulationShapes();
+    testSampleAndHold();
 
     std::puts ("All CoreDSP unit tests passed.");
     return 0;

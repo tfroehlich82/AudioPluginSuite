@@ -5,10 +5,20 @@ namespace
     namespace Palette = MicroTimingChaos::Palette;
 
     constexpr int editorWidth = 1200;
-    constexpr int editorHeight = 820;
+    constexpr int editorHeight = 980;
     constexpr int groupTitleHeight = 18;
     constexpr int knobRowHeight = 104;
     constexpr int groupGap = 10;
+
+    // Fixed sizes. Only the attractor and the step grid resize with the window; everything else keeps these sizes.
+    constexpr int rightColumnWidth = 664;
+    constexpr int rightColumnGap = 14;
+    constexpr int patternGroupHeight = knobRowHeight * 2 + groupTitleHeight + 12;
+    constexpr int melodyChaosGroupHeight = knobRowHeight + groupTitleHeight + 12;
+    constexpr int lerpGroupHeight = 348;
+    constexpr int transportGroupHeight = knobRowHeight + groupTitleHeight + 12;
+    constexpr int modulationGroupHeight = 240;
+    constexpr int modulationGroupWidth = 490;
 
     /** Splits an area into a grid of cells, with a little room around each one. */
     std::vector<juce::Rectangle<int>> gridCells (juce::Rectangle<int> area, int count, int columns)
@@ -130,7 +140,8 @@ MicroTimingChaosEditor::MicroTimingChaosEditor (MicroTimingChaosProcessor& p)
     setLookAndFeel (&lookAndFeel);
     setSize (editorWidth, editorHeight);
     setResizable (true, true);
-    setResizeLimits (980, 720, 1800, 1200);
+    // The smallest size is the fixed right column plus the smallest sequencer and display.
+    setResizeLimits (editorWidth, editorHeight, 1800, 1200);
 
     helpTracker.onMove = [this] (const juce::MouseEvent& e) { showHelp (e); };
     addMouseListener (&helpTracker, true);
@@ -159,7 +170,7 @@ MicroTimingChaosEditor::MicroTimingChaosEditor (MicroTimingChaosProcessor& p)
                               static_cast<juce::Component*> (&chaosSlider), static_cast<juce::Component*> (&timingRangeSlider),
                               static_cast<juce::Component*> (&velocityChaosSlider),
                               static_cast<juce::Component*> (&lerpViewSelector), static_cast<juce::Component*> (&curveEditor),
-                              static_cast<juce::Component*> (&lerpPreview),
+                              static_cast<juce::Component*> (&lerpPreview), static_cast<juce::Component*> (&modulation),
                               static_cast<juce::Component*> (&lerpSlider), static_cast<juce::Component*> (&lerpXMultSlider),
                               static_cast<juce::Component*> (&lerpYMultSlider), static_cast<juce::Component*> (&lerpZMultSlider),
                               static_cast<juce::Component*> (&tempoSlider), static_cast<juce::Component*> (&speedSlider),
@@ -341,35 +352,42 @@ void MicroTimingChaosEditor::resized()
     helpLabel.setBounds (area.removeFromBottom (22));
     area.removeFromBottom (8);
 
-    auto left = area.removeFromLeft (juce::roundToInt ((float) area.getWidth() * 0.42f));
-    area.removeFromLeft (14);
-    auto right = area;
+    // The right column has a fixed width and sits at the right edge. The left column takes the rest.
+    auto right = area.removeFromRight (rightColumnWidth);
+    area.removeFromRight (rightColumnGap);
+    auto left = area;
 
-    // Left column: attractor, readout and step grid
-    attractor.setBounds (left.removeFromTop (juce::roundToInt ((float) left.getHeight() * 0.36f)));
+    // Left column, from the bottom: the modulation panel (fixed size), then the attractor, readout and step grid
+    auto modulationGroup = left.removeFromBottom (modulationGroupHeight).withWidth (modulationGroupWidth);
+    left.removeFromBottom (groupGap);
+
+    attractor.setBounds (left.removeFromTop (juce::roundToInt ((float) left.getHeight() * 0.30f)));
     readout.setBounds (left.removeFromTop (22));
     left.removeFromTop (6);
     grid.setBounds (left);
+    modulation.setBounds (innerOf (modulationGroup));
 
-    // Right column, top to bottom: pattern, melody and chaos, lerp curve (flexible), transport
-    auto patternGroup = right.removeFromTop (knobRowHeight * 2 + groupTitleHeight + 12);
+    // Right column, top to bottom, all at fixed heights: pattern, melody and chaos, lerp curve, transport
+    auto patternGroup = right.removeFromTop (patternGroupHeight);
     right.removeFromTop (groupGap);
 
-    auto melodyChaos = right.removeFromTop (knobRowHeight + groupTitleHeight + 12);
+    auto melodyChaos = right.removeFromTop (melodyChaosGroupHeight);
     right.removeFromTop (groupGap);
     auto melodyGroup = melodyChaos.removeFromLeft (juce::roundToInt ((float) melodyChaos.getWidth() * 0.48f));
     melodyChaos.removeFromLeft (groupGap);
     auto chaosGroup = melodyChaos;
 
-    auto transportGroup = right.removeFromBottom (knobRowHeight + groupTitleHeight + 12);
-    right.removeFromBottom (groupGap);
-    auto lerpGroup = right;
+    auto lerpGroup = right.removeFromTop (lerpGroupHeight);
+    right.removeFromTop (groupGap);
+
+    auto transportGroup = right.removeFromTop (transportGroupHeight);
 
     groups.push_back ({ "PATTERN", patternGroup });
     groups.push_back ({ "MELODY", melodyGroup });
     groups.push_back ({ "CHAOS", chaosGroup });
     groups.push_back ({ "LERP CURVE", lerpGroup });
     groups.push_back ({ "TRANSPORT", transportGroup });
+    groups.push_back ({ "MODULATION", modulationGroup });
 
     // Pattern: 3 x 2
     const auto patternCells = gridCells (innerOf (patternGroup), 6, 3);
@@ -448,6 +466,8 @@ void MicroTimingChaosEditor::timerCallback()
     lerpPreview.refresh (processor.getRecentSteps(), processor.getDriftAmounts(), rootValue, timingValue);
 
     // Tempo: follows the host when BPM Sync is on
+    modulation.refresh();
+
     const bool synced = apvts.getRawParameterValue (MicroTimingChaosProcessor::syncId)->load() > 0.5f;
     tempoSlider.setEnabled (! synced);
 

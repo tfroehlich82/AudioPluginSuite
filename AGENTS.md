@@ -39,7 +39,8 @@ modules/
     include/ChaosEngine.h         LorenzAttractor (RK4), LorenzParams, LorenzState
     include/SpectralEngine.h      DriftEngine (overlap-add FFT), LfoShape, lfoValue()
     include/SequencerEngine.h     CoreDSP::Sequencer: step rates, hashed pattern and melody, timing, swing, gate, velocity
-    tests/DSPTests.cpp            CoreDSPTests (26 test functions)
+    include/ModulationEngine.h    CoreDSP::Modulation: LFO shapes (cycles in, value in [-1, 1]) and the normalised offset clamp
+    tests/DSPTests.cpp            CoreDSPTests (28 test functions)
     CMakeLists.txt                CoreDSP INTERFACE target, CoreDSPTests
   suite_ui/                       Shared UI. NOT a library target, see section 8
     include/SuiteLookAndFeel.h    Colours namespace, SuiteLookAndFeel (LookAndFeel_V4)
@@ -52,12 +53,14 @@ plugins/<Name>/
   CMakeLists.txt                  juce_add_plugin, links, <Name>Tests executable, add_test
   Source/PluginProcessor.{h,cpp}  APVTS, processing, state, createPluginFilter()
   Source/PluginEditor.{h,cpp}     Editor, 60 Hz Timer reads processor snapshots
-  tests/PluginTests.cpp           Plugin tests: SpectralDrift 13, DynamicSaturation 10, MicroTimingChaos 23
+  tests/PluginTests.cpp           Plugin tests: SpectralDrift 13, DynamicSaturation 10, MicroTimingChaos 33
 plugins/MicroTimingChaos/         Additional files:
   MicroTimingChaosLookAndFeel.h   At the plugin root (not include/). Palette namespace and LookAndFeel
   Source/MicroTimingChaosLookAndFeel.cpp  Rotary knobs, BPM Sync button, combo box; textures and icons from BinaryData
   Source/LerpCurveEditor.{h,cpp}  The 5-point curve editor (Curve tab)
   Source/LerpPreview.{h,cpp}      The live drift preview (Preview tab)
+  Source/LfoScope.{h,cpp}         One cycle of an LFO shape, with a dot at its current position
+  Source/ModulationPanel.{h,cpp}  The two LFO strips and the four routing slots (bottom of the left column)
   Resources/icons/*.svg           BPM Sync icons, embedded in the binary
   Resources/textures/*.png        4K textures, embedded and scaled down at load
   generate_texture.py, make_png.py  Scripts that produced the textures (owner's tools)
@@ -140,7 +143,7 @@ Latency reported: 2048 samples (`setLatencySamples`). Tail length: 0.
 
 Latency reported: the oversampler's integer latency, computed in `prepareToPlay`. The dry path is delayed by the same amount. Tail length: 0.
 
-### 4.3 Micro-Timing Chaos Sequencer (20 parameters)
+### 4.3 Micro-Timing Chaos Sequencer (40 parameters)
 
 | ID | Name | Range | Default | Notes |
 |---|---|---|---|---|
@@ -164,12 +167,29 @@ Latency reported: the oversampler's integer latency, computed in `prepareToPlay`
 | `bpm` | Tempo | 40 – 240 BPM | 120 | Used when Host Sync is off, and disabled while it is on |
 | `sync` | Host Sync | off / on | off | |
 | `speed` | Speed | 0.5 – 2.0 | 1.0 | Attractor speed relative to the tempo |
+| `lfo1Rate` / `lfo2Rate` | LFO Rate | 0.02 – 20 Hz, log | 0.25 Hz | Used when that LFO's Sync is off. Disabled in the UI while synced |
+| `lfo1Shape` / `lfo2Shape` | LFO Shape | Sine, Triangle, Saw, Square, Sample & Hold | Sine | Index 0 to 4 |
+| `lfo1Sync` / `lfo2Sync` | LFO Sync | off / on | off | Locks the LFO to musical time |
+| `lfo1Division` / `lfo2Division` | LFO Division | 4 bars, 2 bars, 1 bar, 1/2, 1/4, 1/8, 1/16 | 1/4 | Cycle length: 16, 8, 4, 2, 1, 0.5, 0.25 beats. Used while synced |
+| `mod1Source` … `mod4Source` | Mod Source | LFO 1, LFO 2 | LFO 1 | Which LFO drives the slot |
+| `mod1Target` … `mod4Target` | Mod Target | the 14 targets in section 4.4 | None | Index 0 to 13. Append-only, see 4.4 |
+| `mod1Amount` … `mod4Amount` | Mod Amount | −100 – +100 % | 0 % | Signed. 0 % leaves the slot idle |
 
 The lerp curve is **not** a parameter. It is five points (x, y) stored as the `lerpCurve` property of the APVTS state (`"x,y;x,y;..."`, four decimals). `loadLerpCurveFromState()` reads it on construction and after `setStateInformation`. The first and last x are fixed at 0 and 1. The default is `y = log10(1 + 9x)`, sampled at x = 0, 0.25, 0.5, 0.75, 1.
 
 Latency reported: 50 ms fixed (`maxTimingRangeMs`, 2400 samples at 48 kHz), regardless of Timing Range. Tail length: 0.
 
 ---
+
+### 4.4 LFOs and modulation routing
+
+Two LFOs and four routing slots. A slot adds `amount × LFO value` to its target, in the target's normalised range (0 to 1 across the parameter's range, so log and bipolar ranges behave the same). The result is clamped to [0, 1], and converted back with the parameter's own `convertFrom0to1`. With no slot aimed at a target, the base value is returned exactly, which is what keeps the committed output unchanged at the defaults.
+
+Targets (`ModTarget` in `PluginProcessor.h`; index order is saved in sessions, so append only): 0 None, 1 Chaos, 2 Timing Range, 3 Velocity Chaos, 4 Lerp, 5 Lerp X Mult, 6 Lerp Y Mult, 7 Lerp Z Mult, 8 Density, 9 Gate, 10 Swing, 11 Velocity (rounded), 12 Speed, 13 Tempo (applies only while Host Sync is off). Excluded on purpose: Rate, Length, Seed, Scale, Root, Octaves and Host Sync.
+
+LFO phase is counted in cycles. Free LFOs accumulate `rate × samples / sampleRate` at the end of each block, so a rate change never jumps the phase, and they keep running when the transport stops. Synced LFOs use `beat / divisionBeats`, where the beat is the sequencer's beat (host or internal), so they hold still when the transport stops. Sample and hold takes its seed from `lfoSeeds` and its cycle index from the unwrapped cycle count.
+
+LFOs are sampled at step times, not per sample, so a fast LFO can alias against the step grid (section 10).
 
 ## 5. Plugin behaviour
 
@@ -217,7 +237,7 @@ The sequencer is driven by musical time, not by sample count. Each block:
 1. **Transport.** With Host Sync on and a host playhead present, the beat position follows the host's PPQ position. A jump of more than 1e-3 beats, or a resync request, resets the step grid. With Host Sync off, the beat position advances by `numSamples / samplesPerBeat`, where `samplesPerBeat` comes from `currentBpm()`. The Tempo parameter is used unless the host reports a tempo while synced. A stopped transport releases every sounding note (`stopAllNotes`) and sets the playhead to −1.
 2. **Steps.** While `nextStep × stepLength` lies inside the block, `scheduleStep()` runs for that step:
    - `advanceAttractorTo(stepBeat, speed)` advances the Lorenz attractor by `Δbeats × speed` time units, in chunks of at most `LorenzAttractor::maxAdvance`. The attractor therefore moves per step, so the same pattern gets the same chaos at any tempo. The trail is published once per step.
-   - The lerp curve is evaluated at Chaos, and the drifts are computed (see below). They are published for the Preview tab.
+   - Every control is read through `modulatedValue()` with this step's offsets: Chaos, Timing Range, Speed, the Lerp amount and multipliers, Density, Gate, Swing, Velocity and Velocity Chaos. The lerp curve is then evaluated on the modulated Chaos, so a modulated Chaos moves along the curve. The drifts are published for the Preview tab, and the offsets are published for `getTargetOffset()`.
    - `stepFires(seed, patternIndex, density)` decides whether the step sounds. Silent steps stop here.
    - The pitch is `blendDegree(hashDegree, lorenzDegree, pitchDrift, count)`, mapped to the scale by `notePitch`.
    - Velocity is `velocityFor(baseVelocity, velocityChaos × velocityDrift, z)`.
@@ -242,11 +262,13 @@ Chaos at 0 gives `curve = 0`, so nothing moves. Lerp at 0 turns all drift off. A
 
 Audio: the stereo buffer passes through unchanged (tested).
 
+**Block start.** Before the steps, `processBlock` resyncs to the host position, computes the block-start offsets (for the free tempo), and publishes each LFO's phase and value for the UI. At the end of the block the free LFOs advance.
+
 ---
 
 ## 6. Test architecture
 
-Eight CTest entries run six executables: `CoreDSPTests` (26 test functions), `SuiteUI_Tests` (`SuiteUITests`, 9), `SpectralDriftTests` (13), `DynamicSaturationTests` (10), `MicroTimingChaosTests` (23), and `PluginHostTests`, which has one ctest entry per plugin (3). The README has the full list.
+Eight CTest entries run six executables: `CoreDSPTests` (28 test functions), `SuiteUI_Tests` (`SuiteUITests`, 9), `SpectralDriftTests` (13), `DynamicSaturationTests` (10), `MicroTimingChaosTests` (33), and `PluginHostTests`, which has one ctest entry per plugin (3). The README has the full list.
 
 **Assertions.** Every test file starts with `#undef NDEBUG` before `<cassert>`. Release builds (what CI uses) would otherwise compile every `assert` away. Keep this in every new test file.
 
@@ -254,7 +276,7 @@ Eight CTest entries run six executables: `CoreDSPTests` (26 test functions), `Su
 
 **Plugin tests** (`plugins/<Name>/tests/PluginTests.cpp`): each executable compiles the plugin's own sources directly. The Micro-Timing Chaos plugin keeps its source list in the CMake variable `MICRO_TIMING_CHAOS_SOURCES`, which the plugin and its test executable both use, so a new source file only needs adding in one place. Tests include `tests/common/PluginTestUtils.h`. They run under `juce::ScopedJuceInitialiser_GUI`, and `JUCE_MODAL_LOOPS_PERMITTED=1` is defined for them so `MessageManager::runDispatchLoopUntil` exists. `checkEditor()` runs the message loop so the editor's 60 Hz timer fires, then paints the editor into an image.
 
-The Micro-Timing Chaos tests cover the lerp curve (defaults, point editing and ordering, state round trip) and the hybrid drift (Lerp 0 and a zero X multiplier each switch the axis off). They do not cover mouse interaction with the curve, tab switching, or the BPM readout.
+The Micro-Timing Chaos tests cover the lerp curve (defaults, point editing and ordering, state round trip) and the hybrid drift (Lerp 0 and a zero X multiplier each switch the axis off). The LFO tests cover the no-modulation regression (an embedded table of the committed event log, which must match exactly), timing modulation and its bipolar symmetry, the Amount 0 case, the synced period against the host beat, the free rate in Hz, sample and hold, every target staying in range, state round trip, latency, and the editor with modulation in use. They do not cover mouse interaction with the curve, tab switching, the BPM readout, or the LFO panel's mouse use.
 
 **Host tests** (`tests/host/PluginHostTests.cpp`): loads the built `.vst3` bundle through `AudioPluginFormatManager` with `JUCE_PLUGINHOST_VST3=1`. This define is needed because the host is compiled out by default in JUCE 7. The test scans, instantiates, opens the editor, prepares and processes. CTest passes the bundle path as `$<TARGET_FILE_DIR:<Plugin>_VST3>/../..`, and each host test depends on its plugin's VST3 target.
 
@@ -284,6 +306,13 @@ Mouse events in tests use the 15-argument `juce::MouseEvent` constructor of JUCE
 - **Atomics only between audio and UI.** The audio thread never locks.
 - **Parameter IDs and plugin codes are permanent.** Renaming breaks saved sessions.
 - **`COPY_PLUGIN_AFTER_BUILD FALSE`.** The JUCE default writes into Program Files, which fails without admin rights.
+- **Modulation in normalised space.** An amount of ±100 % sweeps the full range of the target, whatever its scale.
+- **Discrete targets excluded** (Rate, Length, Seed, Scale, Root, Octaves, Host Sync). They would change the pattern identity or pitch set abruptly.
+- **Tempo modulation applies only while Host Sync is off**, because the host tempo is authoritative when synced.
+- **Modulation applies before the lerp curve**, so a modulated Chaos moves along the curve.
+- **The routing and LFO settings are plain APVTS parameters**, so they automate, save and restore like the rest.
+- **The LFO panel sits at the bottom of the left column, and the window is 980 px tall.** The plan's right-column option left the lerp curve about 100 px high.
+- **Editor sizing.** Only the attractor and the step grid resize with the window. The right column (664 px wide, group heights fixed), the lerp group (348 px), and the modulation panel (490 × 240) keep fixed sizes. The minimum window is 1200 × 980.
 - **Spectral Drift preview:** the old panel was blank because, with no audio, the traces sat at the −120 dB floor. The fix adds a "Waiting for audio" state (shown until frames and input energy arrive) and frequency labels. A regression test checks that a 1 kHz tone reaches the snapshot at bin 43.
 
 ---
@@ -325,6 +354,8 @@ If you add a new consumer, use `suite_ui_add_to_target`. Do not add `SuiteUI` to
 
 - **MicroTiming DAW load:** the reported failure is not reproduced. JUCE's VST3 host loads and opens it, both before and after the stereo bus change. The remedy applied (stereo pass-through) is a best guess. If it still fails in a DAW, ask for the DAW name, its scanner log, and the exact error.
 - **Spectral Drift feedback range vs cap.** The Feedback range is 0–20 %, but processing caps the value at `maxFeedbackPercent` = 12, so the 12–20 % part of the knob does nothing. Decide whether the range should be 0–12 % or the cap should be raised to 20 %, then update the code, section 4.1, the README and the changelog together.
+- **LFO sampling.** LFOs are evaluated at step times, so an LFO faster than the step rate aliases against the grid. Tempo and Speed are evaluated per block and per step respectively.
+- **Discrete targets not modulated:** Root and Octaves (sample and hold on these is a possible follow-up), and Rate, Length and Scale.
 - **Micro-Timing Chaos: plan items not built.** Zoom and pan on the curve view. UI automation tests for point dragging, tab switching, the BPM readout and the help line. The plan's "latency = timing range" (deliberately not built, see section 7).
 - **Micro-Timing Chaos: not exercised live.** The curve's mouse handling (drag, right-click reset, double-click reset) and hover help were written and compiled but not driven in a running host. The editor was checked by rendering it to an image at the default size (1200 × 820). The screenshot check found and fixed a header overlap and a readout collision.
 - **macOS CI** is pinned to `macos-14` with Xcode 15.4. The `macos-latest` image failed to compile JUCE 7.0.9's `juce_gui_basics.mm` while building `juceaide`. The cause is unconfirmed. If the pin fails, move to JUCE 7.0.12 (patch release, same API).
@@ -360,6 +391,9 @@ If you add a new consumer, use `suite_ui_add_to_target`. Do not add `SuiteUI` to
 - Duplicate-symbol link errors with JUCE: see section 8.
 - `add_library(... STATIC)` linking JUCE modules bundles them. `OBJECT` libraries have the same problem.
 - The root `CMakeLists.txt` must `include()` `SuiteUI.cmake` before any plugin subdirectory, because `suite_ui_add_to_target` is a function.
+- `juce::AudioParameterFloat`'s seven-argument constructor (label, category, `stringFromValue`) gives the value box its text. Setting `slider.textFromValueFunction` after the `SliderAttachment` exists does not refresh the box, so put the formatting on the parameter.
+- In JUCE 7.0.9 the text box position is `juce::Slider::TextBoxRight`. `juce::TextEntryBoxPosition::TextBoxRight` does not compile.
+- A baseline for a processing change: build the committed code in a `git worktree` with `-DFETCHCONTENT_SOURCE_DIR_JUCE=<repo>/build/_deps/juce-src` (no re-download), run the same probe there, and diff against the new build.
 - Test failures reported as `Exit code 0xc0000409` with `Assertion failed` are a failed `checkRange` or similar assert. The message names the file and line. Run the executable directly to see the full output.
 
 ---
@@ -381,6 +415,8 @@ The original brief (`coding_agent_prompt.md`) is no longer in the repository. Th
 | Micro-Timing: Lerp shown in Lerp and in Transport (plan) | Lerp appears once, in the Lerp Curve group | Avoids two controls for one value |
 | Micro-Timing: `LookAndFeel` in `include/` (plan) | In the plugin root, next to the other source headers | The root is on the include path for the plugin and its tests |
 | Output spectrum on the display | Measured on finished output (one frame behind) | Shows the real overlap-add result |
+| Micro-Timing: LFO panel in the right column, window 940 px (plan, D9) | LFO panel at the bottom of the left column, window 980 px | The right column had no room for a lerp curve |
+| Micro-Timing: LFO and routing as APVTS parameters (plan) | 20 new parameters, `numControls` 40 | The plan's design; sessions save them |
 
 ---
 
