@@ -733,6 +733,8 @@ namespace
         // Swing moves only the odd steps, by a fraction of the step.
         assert (swingBeats (0, 0.5f, 0.25) == 0.0);
         assert (std::abs (swingBeats (1, 0.5f, 0.25) - 0.125) < 1e-9);
+        assert (std::abs (swingBeats (1, -0.5f, 0.25) + 0.125) < 1e-9);   // negative swing moves odd steps early
+        assert (std::abs (swingBeats (1, 2.0f, 0.25) - 0.25) < 1e-9);     // clamps to one full step
 
         // Gate never exceeds one step and never drops below 5 %.
         for (float y = -1.0f; y <= 1.0f; y += 0.25f)

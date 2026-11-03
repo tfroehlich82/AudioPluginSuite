@@ -1,27 +1,60 @@
 #include "PluginEditor.h"
 
-#include "SequencerEngine.h"
-
 namespace
 {
-    constexpr int editorWidth = 1040;
-    constexpr int editorHeight = 680;
-    constexpr int knobColumns = 4;
+    namespace Palette = MicroTimingChaos::Palette;
 
-    // Places components in a grid, left to right and top to bottom.
-    void layoutGrid (juce::Rectangle<int> area, const std::vector<juce::Component*>& cells, int columns)
+    constexpr int editorWidth = 1200;
+    constexpr int editorHeight = 820;
+    constexpr int groupTitleHeight = 18;
+    constexpr int knobRowHeight = 104;
+    constexpr int groupGap = 10;
+
+    /** Splits an area into a grid of cells, with a little room around each one. */
+    std::vector<juce::Rectangle<int>> gridCells (juce::Rectangle<int> area, int count, int columns)
     {
-        const int rows = ((int) cells.size() + columns - 1) / columns;
+        std::vector<juce::Rectangle<int>> cells;
+        const int rows = (count + columns - 1) / columns;
         const int cellWidth = area.getWidth() / columns;
         const int cellHeight = area.getHeight() / juce::jmax (1, rows);
 
-        for (int i = 0; i < (int) cells.size(); ++i)
+        for (int i = 0; i < count; ++i)
         {
             const int column = i % columns;
             const int row = i / columns;
-            cells[(size_t) i]->setBounds (juce::Rectangle<int> (area.getX() + column * cellWidth, area.getY() + row * cellHeight,
-                                                                 cellWidth, cellHeight).reduced (3));
+            cells.push_back (juce::Rectangle<int> (area.getX() + column * cellWidth, area.getY() + row * cellHeight,
+                                                   cellWidth, cellHeight).reduced (3));
         }
+
+        return cells;
+    }
+
+    /** The area inside a group frame, below its title. */
+    juce::Rectangle<int> innerOf (juce::Rectangle<int> group)
+    {
+        return group.withTrimmedTop (groupTitleHeight + 4).reduced (10, 4);
+    }
+
+    void describe (juce::Component& component, const juce::String& help)
+    {
+        component.setHelpText (help);
+    }
+
+    /** Sets the same help text on a knob, its caption and its slider, so hovering any of them shows it. */
+    void describe (SuiteUI::LabelledSlider& control, const juce::String& help)
+    {
+        control.setHelpText (help);
+        control.label.setHelpText (help);
+        control.slider.setHelpText (help);
+        control.slider.setTooltip (help);
+    }
+
+    void styleCaption (juce::Label& label, const juce::String& text)
+    {
+        label.setText (text, juce::dontSendNotification);
+        label.setFont (juce::Font (10.0f, juce::Font::bold));
+        label.setColour (juce::Label::textColourId, Palette::textDim);
+        label.setJustificationType (juce::Justification::centred);
     }
 }
 
@@ -51,7 +84,6 @@ void StepGridView::paint (juce::Graphics& g)
     g.setColour (SuiteUI::Colours::panel);
     g.fillRoundedRectangle (area, 6.0f);
 
-    // Timing centre line and the range limits.
     g.setColour (SuiteUI::Colours::track);
     g.drawHorizontalLine ((int) centreY, area.getX(), area.getRight());
 
@@ -60,7 +92,6 @@ void StepGridView::paint (juce::Graphics& g)
         const auto column = juce::Rectangle<float> (area.getX() + (float) step * columnWidth, area.getY(), columnWidth, area.getHeight()).reduced (3.0f);
         const bool fires = step < (int) firing.size() && firing[(size_t) step];
 
-        // Steps that fire are filled, steps that rest stay dim. The playhead outlines its column.
         g.setColour (fires ? accent.withAlpha (0.18f) : SuiteUI::Colours::panelLight);
         g.fillRoundedRectangle (column.withTrimmedBottom (column.getHeight() * 0.7f), 4.0f);
 
@@ -76,7 +107,6 @@ void StepGridView::paint (juce::Graphics& g)
                     juce::Justification::centred);
     }
 
-    // Recent notes: horizontal position is the step, vertical offset is the timing shift, dot size is the velocity.
     for (const auto& event : recent)
     {
         if (event.velocity <= 0.0f || event.patternStep < 0 || event.patternStep >= length)
@@ -94,30 +124,76 @@ void StepGridView::paint (juce::Graphics& g)
 //==============================================================================
 MicroTimingChaosEditor::MicroTimingChaosEditor (MicroTimingChaosProcessor& p)
     : AudioProcessorEditor (&p),
-      processor (p)
+      processor (p),
+      curveEditor (p)
 {
     setLookAndFeel (&lookAndFeel);
     setSize (editorWidth, editorHeight);
     setResizable (true, true);
-    setResizeLimits (820, 580, 1600, 1100);
+    setResizeLimits (980, 720, 1800, 1200);
+
+    helpTracker.onMove = [this] (const juce::MouseEvent& e) { showHelp (e); };
+    addMouseListener (&helpTracker, true);
+
+    helpLabel.setFont (juce::Font (12.0f));
+    helpLabel.setColour (juce::Label::textColourId, Palette::text);
+    helpLabel.setText ("Hover a control to see what it does.", juce::dontSendNotification);
 
     readout.setJustificationType (juce::Justification::centredLeft);
     readout.setColour (juce::Label::textColourId, SuiteUI::Colours::text);
     readout.setFont (juce::Font (13.0f));
 
-    for (auto* component : { static_cast<juce::Component*> (&attractor), static_cast<juce::Component*> (&grid),
-                             static_cast<juce::Component*> (&readout), static_cast<juce::Component*> (&rateSelector),
-                             static_cast<juce::Component*> (&scaleBox), static_cast<juce::Component*> (&syncButton),
-                             static_cast<juce::Component*> (&lengthSlider), static_cast<juce::Component*> (&densitySlider),
-                             static_cast<juce::Component*> (&seedSlider), static_cast<juce::Component*> (&gateSlider),
-                             static_cast<juce::Component*> (&swingSlider), static_cast<juce::Component*> (&velocitySlider),
-                             static_cast<juce::Component*> (&rootSlider), static_cast<juce::Component*> (&octavesSlider),
-                             static_cast<juce::Component*> (&chaosSlider), static_cast<juce::Component*> (&timingSlider),
-                             static_cast<juce::Component*> (&velocityChaosSlider), static_cast<juce::Component*> (&speedSlider),
-                             static_cast<juce::Component*> (&tempoSlider) })
+    hostTempoLabel.setFont (juce::Font (10.0f, juce::Font::bold));
+    hostTempoLabel.setColour (juce::Label::textColourId, Palette::textDim);
+    hostTempoLabel.setJustificationType (juce::Justification::centred);
+
+    styleCaption (scaleCaption, "SCALE");
+
+    for (auto* component : { static_cast<juce::Component*> (&helpLabel), static_cast<juce::Component*> (&attractor),
+                              static_cast<juce::Component*> (&readout), static_cast<juce::Component*> (&grid),
+                              static_cast<juce::Component*> (&lengthSlider), static_cast<juce::Component*> (&densitySlider),
+                              static_cast<juce::Component*> (&seedSlider), static_cast<juce::Component*> (&gateSlider),
+                              static_cast<juce::Component*> (&swingSlider), static_cast<juce::Component*> (&velocitySlider),
+                              static_cast<juce::Component*> (&rootSlider), static_cast<juce::Component*> (&octavesSlider),
+                              static_cast<juce::Component*> (&scaleCaption), static_cast<juce::Component*> (&scaleBox),
+                              static_cast<juce::Component*> (&chaosSlider), static_cast<juce::Component*> (&timingRangeSlider),
+                              static_cast<juce::Component*> (&velocityChaosSlider),
+                              static_cast<juce::Component*> (&lerpViewSelector), static_cast<juce::Component*> (&curveEditor),
+                              static_cast<juce::Component*> (&lerpPreview),
+                              static_cast<juce::Component*> (&lerpSlider), static_cast<juce::Component*> (&lerpXMultSlider),
+                              static_cast<juce::Component*> (&lerpYMultSlider), static_cast<juce::Component*> (&lerpZMultSlider),
+                              static_cast<juce::Component*> (&tempoSlider), static_cast<juce::Component*> (&speedSlider),
+                              static_cast<juce::Component*> (&rateSelector), static_cast<juce::Component*> (&syncButton),
+                              static_cast<juce::Component*> (&hostTempoLabel) })
         addAndMakeVisible (component);
 
-    // Rate: a choice parameter shown as a segmented switch.
+    // Help text for every control, and tooltips on the knobs.
+    describe (lengthSlider, "Pattern length in steps, 2 to 16.");
+    describe (densitySlider, "How many steps fire. The seed decides which ones.");
+    describe (seedSlider, "Seed for the fixed pattern and melody. The same seed gives the same pattern.");
+    describe (gateSlider, "Note length as a share of a step. Lorenz Y lengthens or shortens it when Lerp is on.");
+    describe (swingSlider, "Delays every second step.");
+    describe (velocitySlider, "Base velocity of each note, before chaos.");
+    describe (rootSlider, "Lowest melody note, as a MIDI note number.");
+    describe (octavesSlider, "How many octaves the melody spans.");
+    describe (scaleBox, "The scale the melody is chosen from.");
+    describe (chaosSlider, "Chaos, 0 to 100 %. It is the input to the lerp curve. At 0 the pattern never moves.");
+    describe (timingRangeSlider, "Maximum timing shift in ms, reached at the attractor's X extremes.");
+    describe (velocityChaosSlider, "How strongly the attractor's Z moves velocity.");
+    describe (lerpSlider, "How far each step drifts from the fixed pattern toward the attractor. 0 % turns the drift off.");
+    describe (lerpXMultSlider, "Timing drift multiplier, 0 to 2x.");
+    describe (lerpYMultSlider, "Pitch and gate drift multiplier, 0 to 2x.");
+    describe (lerpZMultSlider, "Velocity drift multiplier, 0 to 2x.");
+    describe (tempoSlider, "Tempo used when BPM Sync is off.");
+    describe (speedSlider, "How fast the attractor moves, relative to the tempo.");
+    describe (rateSelector, "Step length: quarter, eighth, sixteenth or thirty-second notes.");
+    describe (syncButton, "BPM Sync: follow the host's tempo and transport.");
+    curveEditor.setHelpText ("The curve maps chaos (0 to 1) to timing, pitch and velocity drift. "
+                             "The multipliers scale each axis. Drag points; right-click a point to reset it, "
+                             "double-click to reset the curve.");
+    lerpPreview.setHelpText ("Live drift per axis, and the timing, pitch and velocity of the last steps.");
+    lerpViewSelector.setHelpText ("Switch between the curve editor and the live preview.");
+
     rateSelector.setOptions ({ "1/4", "1/8", "1/16", "1/32" });
     rateAttachment = std::make_unique<juce::ParameterAttachment> (
         *processor.apvts.getParameter (MicroTimingChaosProcessor::rateId),
@@ -125,10 +201,21 @@ MicroTimingChaosEditor::MicroTimingChaosEditor (MicroTimingChaosProcessor& p)
     rateSelector.onChange = [this] (int index) { rateAttachment->setValueAsCompleteGesture ((float) index); };
     rateAttachment->sendInitialUpdate();
 
+    lerpViewSelector.setOptions ({ "CURVE", "PREVIEW" });
+    lerpViewSelector.setSelectedIndex (0);
+    lerpViewSelector.onChange = [this] (int index)
+    {
+        curveEditor.setVisible (index == 0);
+        lerpPreview.setVisible (index == 1);
+    };
+    lerpPreview.setVisible (false);
+
     scaleBox.addItemList ({ "Chromatic", "Major", "Minor", "Minor Pentatonic", "Dorian", "Whole Tone" }, 1);
     scaleBox.setTextWhenNothingSelected ("Scale");
 
-    // Units and formatting.
+    hostTempoLabel.setText ("FREE", juce::dontSendNotification);
+
+    // Units and formatting
     lengthSlider.slider.setNumDecimalPlacesToDisplay (0);
     densitySlider.slider.setTextValueSuffix (" %");
     seedSlider.slider.setNumDecimalPlacesToDisplay (0);
@@ -138,9 +225,11 @@ MicroTimingChaosEditor::MicroTimingChaosEditor (MicroTimingChaosProcessor& p)
     rootSlider.slider.setNumDecimalPlacesToDisplay (0);
     octavesSlider.slider.setNumDecimalPlacesToDisplay (0);
     chaosSlider.slider.setTextValueSuffix (" %");
-    timingSlider.slider.setTextValueSuffix (" ms");
     velocityChaosSlider.slider.setTextValueSuffix (" %");
-    speedSlider.slider.setNumDecimalPlacesToDisplay (2);
+    lerpSlider.slider.setTextValueSuffix (" %");
+    lerpXMultSlider.slider.setTextValueSuffix (" x");
+    lerpYMultSlider.slider.setTextValueSuffix (" x");
+    lerpZMultSlider.slider.setTextValueSuffix (" x");
     tempoSlider.slider.setTextValueSuffix (" BPM");
 
     auto& apvts = processor.apvts;
@@ -159,10 +248,14 @@ MicroTimingChaosEditor::MicroTimingChaosEditor (MicroTimingChaosProcessor& p)
     bind (MicroTimingChaosProcessor::rootId, rootSlider.slider);
     bind (MicroTimingChaosProcessor::octavesId, octavesSlider.slider);
     bind (MicroTimingChaosProcessor::chaosId, chaosSlider.slider);
-    bind (MicroTimingChaosProcessor::timingRangeId, timingSlider.slider);
+    bind (MicroTimingChaosProcessor::timingRangeId, timingRangeSlider.slider);
     bind (MicroTimingChaosProcessor::velocityChaosId, velocityChaosSlider.slider);
-    bind (MicroTimingChaosProcessor::speedId, speedSlider.slider);
+    bind (MicroTimingChaosProcessor::lerpId, lerpSlider.slider);
+    bind (MicroTimingChaosProcessor::lerpXMultId, lerpXMultSlider.slider);
+    bind (MicroTimingChaosProcessor::lerpYMultId, lerpYMultSlider.slider);
+    bind (MicroTimingChaosProcessor::lerpZMultId, lerpZMultSlider.slider);
     bind (MicroTimingChaosProcessor::bpmId, tempoSlider.slider);
+    bind (MicroTimingChaosProcessor::speedId, speedSlider.slider);
 
     scaleAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
         apvts, MicroTimingChaosProcessor::scaleId, scaleBox);
@@ -175,56 +268,157 @@ MicroTimingChaosEditor::MicroTimingChaosEditor (MicroTimingChaosProcessor& p)
 MicroTimingChaosEditor::~MicroTimingChaosEditor()
 {
     stopTimer();
+    removeMouseListener (&helpTracker);
     setLookAndFeel (nullptr);
+}
+
+void MicroTimingChaosEditor::showHelp (const juce::MouseEvent& e)
+{
+    if (auto* component = e.eventComponent)
+    {
+        const auto text = component->getHelpText();
+
+        if (text.isNotEmpty())
+            helpLabel.setText (text, juce::dontSendNotification);
+    }
 }
 
 void MicroTimingChaosEditor::paint (juce::Graphics& g)
 {
-    juce::ColourGradient background (SuiteUI::Colours::panelLight, 0.0f, 0.0f,
-                                     SuiteUI::Colours::background, 0.0f, (float) getHeight(), false);
-    g.setGradientFill (background);
-    g.fillAll();
+    lookAndFeel.paint (g, *this);
+
+    // Title band: a flat background, so the grid texture does not run through the title
+    g.setColour (Palette::background);
+    g.fillRect (0, 0, getWidth(), 42);
+
+    const auto header = getLocalBounds().reduced (16, 0).removeFromTop (30).toFloat();
 
     g.setColour (lookAndFeel.getAccent());
     g.setFont (juce::Font (20.0f, juce::Font::bold));
-    g.drawText ("MICRO-TIMING CHAOS", getLocalBounds().reduced (16, 0).removeFromTop (30),
-                juce::Justification::centredLeft);
+    g.drawText ("MICRO-TIMING CHAOS", header, juce::Justification::centredLeft);
 
-    g.setColour (SuiteUI::Colours::textDim);
-    g.setFont (juce::Font (12.0f));
-    g.drawText ("Lorenz X shifts the timing  |  Y picks the pitch and gate  |  Z sets the velocity",
-                getLocalBounds().reduced (16, 0).removeFromTop (30), juce::Justification::centredRight);
+    // Axis legend, right-aligned: X drives timing, Y pitch and gate, Z velocity
+    const juce::Font legendFont (11.0f);
+    const struct { juce::String text; juce::Colour colour; } legend[] = {
+        { "X  timing", Palette::timing },
+        { "Y  pitch & gate", Palette::pitch },
+        { "Z  velocity", Palette::velocity }
+    };
+
+    g.setFont (legendFont);
+    float right = header.getRight();
+    for (int i = 2; i >= 0; --i)
+    {
+        const float width = legendFont.getStringWidthFloat (legend[i].text) + 8.0f;
+        g.setColour (legend[i].colour);
+        g.drawText (legend[i].text, juce::Rectangle<float> (right - width, header.getY(), width, header.getHeight()),
+                    juce::Justification::centredRight);
+        right -= width + 14.0f;
+    }
+
+    for (const auto& group : groups)
+    {
+        const auto bounds = group.bounds.toFloat();
+
+        g.setColour (Palette::panel.withAlpha (0.55f));
+        g.fillRoundedRectangle (bounds, 8.0f);
+        g.setColour (Palette::track);
+        g.drawRoundedRectangle (bounds, 8.0f, 1.0f);
+
+        g.setColour (group.title == "LERP CURVE" ? lookAndFeel.getAccent() : Palette::textDim);
+        g.setFont (juce::Font (10.0f, juce::Font::bold));
+        g.drawText (group.title, group.bounds.withHeight (groupTitleHeight).translated (0, 4).reduced (12, 0),
+                    juce::Justification::centredLeft);
+    }
 }
 
 void MicroTimingChaosEditor::resized()
 {
+    groups.clear();
+
     auto area = getLocalBounds().reduced (16);
-    area.removeFromTop (34);
+    area.removeFromTop (34);                       // title row, painted in paint()
+    helpLabel.setBounds (area.removeFromBottom (22));
+    area.removeFromBottom (8);
 
-    // Top strip: rate, scale and host sync.
-    auto strip = area.removeFromTop (30);
-    rateSelector.setBounds (strip.removeFromLeft (360).reduced (0, 2));
-    strip.removeFromLeft (12);
-    scaleBox.setBounds (strip.removeFromLeft (220).reduced (0, 3));
-    strip.removeFromLeft (12);
-    syncButton.setBounds (strip.removeFromLeft (150).reduced (0, 2));
-    area.removeFromTop (10);
+    auto left = area.removeFromLeft (juce::roundToInt ((float) area.getWidth() * 0.42f));
+    area.removeFromLeft (14);
+    auto right = area;
 
-    // Left: attractor, readout and step grid. Right: all knobs.
-    auto left = area.removeFromLeft ((int) ((float) area.getWidth() * 0.5f));
-    area.removeFromLeft (12);
-
-    attractor.setBounds (left.removeFromTop ((int) ((float) left.getHeight() * 0.36f)));
+    // Left column: attractor, readout and step grid
+    attractor.setBounds (left.removeFromTop (juce::roundToInt ((float) left.getHeight() * 0.36f)));
     readout.setBounds (left.removeFromTop (22));
     left.removeFromTop (6);
     grid.setBounds (left);
 
-    layoutGrid (area,
-                { &lengthSlider, &densitySlider, &seedSlider, &gateSlider,
-                  &swingSlider, &velocitySlider, &rootSlider, &octavesSlider,
-                  &chaosSlider, &timingSlider, &velocityChaosSlider, &speedSlider,
-                  &tempoSlider },
-                knobColumns);
+    // Right column, top to bottom: pattern, melody and chaos, lerp curve (flexible), transport
+    auto patternGroup = right.removeFromTop (knobRowHeight * 2 + groupTitleHeight + 12);
+    right.removeFromTop (groupGap);
+
+    auto melodyChaos = right.removeFromTop (knobRowHeight + groupTitleHeight + 12);
+    right.removeFromTop (groupGap);
+    auto melodyGroup = melodyChaos.removeFromLeft (juce::roundToInt ((float) melodyChaos.getWidth() * 0.48f));
+    melodyChaos.removeFromLeft (groupGap);
+    auto chaosGroup = melodyChaos;
+
+    auto transportGroup = right.removeFromBottom (knobRowHeight + groupTitleHeight + 12);
+    right.removeFromBottom (groupGap);
+    auto lerpGroup = right;
+
+    groups.push_back ({ "PATTERN", patternGroup });
+    groups.push_back ({ "MELODY", melodyGroup });
+    groups.push_back ({ "CHAOS", chaosGroup });
+    groups.push_back ({ "LERP CURVE", lerpGroup });
+    groups.push_back ({ "TRANSPORT", transportGroup });
+
+    // Pattern: 3 x 2
+    const auto patternCells = gridCells (innerOf (patternGroup), 6, 3);
+    lengthSlider.setBounds (patternCells[0]);
+    densitySlider.setBounds (patternCells[1]);
+    seedSlider.setBounds (patternCells[2]);
+    gateSlider.setBounds (patternCells[3]);
+    swingSlider.setBounds (patternCells[4]);
+    velocitySlider.setBounds (patternCells[5]);
+
+    // Melody: root, octaves, and the scale box
+    const auto melodyCells = gridCells (innerOf (melodyGroup), 3, 3);
+    rootSlider.setBounds (melodyCells[0]);
+    octavesSlider.setBounds (melodyCells[1]);
+    auto scaleCell = melodyCells[2];
+    scaleCaption.setBounds (scaleCell.removeFromTop (16));
+    scaleBox.setBounds (scaleCell.withSizeKeepingCentre (scaleCell.getWidth(), 28));
+
+    // Chaos
+    const auto chaosCells = gridCells (innerOf (chaosGroup), 3, 3);
+    chaosSlider.setBounds (chaosCells[0]);
+    timingRangeSlider.setBounds (chaosCells[1]);
+    velocityChaosSlider.setBounds (chaosCells[2]);
+
+    // Lerp curve: the tabbed view on the left, the lerp and multipliers on the right
+    auto lerpInner = innerOf (lerpGroup);
+    auto lerpKnobs = lerpInner.removeFromRight (juce::roundToInt ((float) lerpInner.getWidth() * 0.36f));
+    lerpViewSelector.setBounds (lerpInner.removeFromTop (26).withWidth (210));
+    lerpInner.removeFromTop (6);
+    curveEditor.setBounds (lerpInner);
+    lerpPreview.setBounds (lerpInner);
+
+    const auto lerpCells = gridCells (lerpKnobs, 4, 2);
+    lerpSlider.setBounds (lerpCells[0]);
+    lerpXMultSlider.setBounds (lerpCells[1]);
+    lerpYMultSlider.setBounds (lerpCells[2]);
+    lerpZMultSlider.setBounds (lerpCells[3]);
+
+    // Transport: tempo, speed, rate, and the BPM Sync button with the host tempo under it
+    const auto transportCells = gridCells (innerOf (transportGroup), 4, 4);
+    tempoSlider.setBounds (transportCells[0]);
+    speedSlider.setBounds (transportCells[1]);
+
+    auto rateCell = transportCells[2];
+    rateSelector.setBounds (rateCell.withSizeKeepingCentre (rateCell.getWidth(), 30));
+
+    auto syncCell = transportCells[3];
+    syncButton.setBounds (syncCell.removeFromTop (30).withSizeKeepingCentre (syncCell.getWidth() - 6, 30));
+    hostTempoLabel.setBounds (syncCell.removeFromTop (18));
 }
 
 void MicroTimingChaosEditor::timerCallback()
@@ -236,6 +430,8 @@ void MicroTimingChaosEditor::timerCallback()
     const auto seedValue = (std::uint32_t) juce::roundToInt (apvts.getRawParameterValue (MicroTimingChaosProcessor::seedId)->load());
     const float densityValue = apvts.getRawParameterValue (MicroTimingChaosProcessor::densityId)->load() / 100.0f;
     const float timingValue = apvts.getRawParameterValue (MicroTimingChaosProcessor::timingRangeId)->load();
+    const int rootValue = juce::roundToInt (apvts.getRawParameterValue (MicroTimingChaosProcessor::rootId)->load());
+    const float chaosValue = apvts.getRawParameterValue (MicroTimingChaosProcessor::chaosId)->load() / 100.0f;
 
     std::vector<bool> fires;
     for (int step = 0; step < CoreDSP::Sequencer::maxSteps; ++step)
@@ -245,6 +441,25 @@ void MicroTimingChaosEditor::timerCallback()
     grid.setState (lengthValue, playhead, timingValue, fires, processor.getRecentSteps());
 
     readout.setText (playhead >= 0 ? "Playhead: step " + juce::String (playhead + 1) + " of " + juce::String (lengthValue)
-                                   : juce::String ("Transport stopped. Press play, or turn off Host Sync."),
-                     juce::dontSendNotification);
+                                   : juce::String ("Transport stopped. Press play, or turn off BPM Sync."),
+                      juce::dontSendNotification);
+
+    curveEditor.setChaosValue (chaosValue);
+    lerpPreview.refresh (processor.getRecentSteps(), processor.getDriftAmounts(), rootValue, timingValue);
+
+    // Tempo: follows the host when BPM Sync is on
+    const bool synced = apvts.getRawParameterValue (MicroTimingChaosProcessor::syncId)->load() > 0.5f;
+    tempoSlider.setEnabled (! synced);
+
+    if (synced)
+    {
+        const auto hostBpm = processor.getHostBpm();
+        hostTempoLabel.setText (hostBpm.hasValue() ? "HOST " + juce::String (*hostBpm, 1) + " BPM"
+                                                   : juce::String ("NO HOST TEMPO"),
+                                juce::dontSendNotification);
+    }
+    else
+    {
+        hostTempoLabel.setText ("FREE RUNNING", juce::dontSendNotification);
+    }
 }

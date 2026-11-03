@@ -41,13 +41,19 @@ public:
     static constexpr const char* chaosId = "chaos";
     static constexpr const char* timingRangeId = "timingRange";
     static constexpr const char* velocityChaosId = "velocityChaos";
-    static constexpr const char* speedId = "speed";
+
+    // Lerp Curve
+    static constexpr const char* lerpId = "lerp";
+    static constexpr const char* lerpXMultId = "lerpXMult";
+    static constexpr const char* lerpYMultId = "lerpYMult";
+    static constexpr const char* lerpZMultId = "lerpZMult";
 
     // Transport
     static constexpr const char* bpmId = "bpm";
     static constexpr const char* syncId = "sync";
+    static constexpr const char* speedId = "speed";
 
-    static constexpr int numControls = 16;
+    static constexpr int numControls = 20;
 
     /** Timing range is at most this large, and the plugin reports this much latency. */
     static constexpr double maxTimingRangeMs = 50.0;
@@ -103,8 +109,48 @@ public:
     /** Pattern length currently in use. */
     int getPatternLength() const noexcept { return patternLength.load (std::memory_order_relaxed); }
 
+    //==============================================================================
+    // Lerp curve: five points that map Chaos (x, 0 to 1) to drift (y, 0 to 1).
+    // The first and last points keep x at 0 and 1. The points are saved with the session state.
+
+    static constexpr int curvePointCount = 5;
+
+    /** The natural default curve: logarithmic, with a gentle slope. */
+    static float naturalCurveValue (float t) noexcept;
+    static juce::Point<float> naturalCurvePoint (int index) noexcept;
+
+    std::array<juce::Point<float>, curvePointCount> getLerpCurve() const;
+
+    /** Moves one point (UI thread). X stays between the neighbouring points, and y is kept in [0, 1]. */
+    void setLerpCurvePoint (int index, juce::Point<float> point);
+
+    /** Restores the natural curve (UI thread). */
+    void resetLerpCurve();
+
+    /** The curve value for a chaos amount in [0, 1]. Safe to call on the audio thread. */
+    float evaluateLerpCurve (float chaos) const noexcept;
+
+    /** Per-axis drift amounts (0 to 1) of the most recent step, after the curve, multipliers and Lerp. */
+    struct DriftAmounts
+    {
+        float timing = 0.0f;
+        float pitch = 0.0f;
+        float velocity = 0.0f;
+    };
+
+    DriftAmounts getDriftAmounts() const noexcept;
+
+    /** The host tempo, if the host reports one. */
+    juce::Optional<double> getHostBpm() const;
+
+    /** The tempo in use: the host tempo when Host Sync is on and the host reports one, otherwise the Tempo parameter. */
+    double getDisplayBpm() const;
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
+    void loadLerpCurveFromState();
+    void storeLerpCurveToState();
 
     struct TrailSnapshot
     {
@@ -167,15 +213,25 @@ private:
     std::atomic<float>* chaos = nullptr;
     std::atomic<float>* timingRange = nullptr;
     std::atomic<float>* velocityChaos = nullptr;
-    std::atomic<float>* speed = nullptr;
+    std::atomic<float>* lerp = nullptr;
+    std::atomic<float>* lerpXMult = nullptr;
+    std::atomic<float>* lerpYMult = nullptr;
+    std::atomic<float>* lerpZMult = nullptr;
     std::atomic<float>* bpm = nullptr;
     std::atomic<float>* sync = nullptr;
+    std::atomic<float>* speed = nullptr;
 
     TrailSnapshot trail;
     std::array<LogSlot, logLength> log;
     std::atomic<int> logHead { 0 };
     std::atomic<int> playheadStep { -1 };
     std::atomic<int> patternLength { 8 };
+
+    std::array<std::atomic<float>, curvePointCount> curveX {};
+    std::array<std::atomic<float>, curvePointCount> curveY {};
+    std::atomic<float> driftTiming { 0.0f };
+    std::atomic<float> driftPitch { 0.0f };
+    std::atomic<float> driftVelocity { 0.0f };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MicroTimingChaosProcessor)
 };
