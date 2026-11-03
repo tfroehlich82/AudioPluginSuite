@@ -95,7 +95,13 @@ namespace
                              Processor::gateId, Processor::swingId, Processor::baseVelocityId, Processor::rootId,
                              Processor::scaleId, Processor::octavesId, Processor::chaosId, Processor::timingRangeId,
                              Processor::velocityChaosId, Processor::lerpId, Processor::lerpXMultId, Processor::lerpYMultId,
-                             Processor::lerpZMultId, Processor::speedId, Processor::bpmId, Processor::syncId },
+                             Processor::lerpZMultId, Processor::speedId, Processor::bpmId, Processor::syncId,
+                             Processor::lfo1RateId, Processor::lfo1ShapeId, Processor::lfo1SyncId, Processor::lfo1DivisionId,
+                             Processor::lfo2RateId, Processor::lfo2ShapeId, Processor::lfo2SyncId, Processor::lfo2DivisionId,
+                             Processor::modSourceIds[0], Processor::modTargetIds[0], Processor::modAmountIds[0],
+                             Processor::modSourceIds[1], Processor::modTargetIds[1], Processor::modAmountIds[1],
+                             Processor::modSourceIds[2], Processor::modTargetIds[2], Processor::modAmountIds[2],
+                             Processor::modSourceIds[3], Processor::modTargetIds[3], Processor::modAmountIds[3] },
                            Processor::numControls);
 
         checkRange (processor.apvts, Processor::rateId, 0.0f, 3.0f, 2.0f);
@@ -118,6 +124,24 @@ namespace
         checkRange (processor.apvts, Processor::speedId, 0.5f, 2.0f, 1.0f);
         checkRange (processor.apvts, Processor::bpmId, 40.0f, 240.0f, 120.0f);
         checkRange (processor.apvts, Processor::syncId, 0.0f, 1.0f, 0.0f);
+
+        // LFOs: rate is logarithmic, shapes are 0 to 4, division is 0 to 6 with 1/4 (index 4) as default
+        for (const char* rateId : { Processor::lfo1RateId, Processor::lfo2RateId })
+            checkRange (processor.apvts, rateId, 0.02f, 20.0f, 0.25f);
+        for (const char* shapeId : { Processor::lfo1ShapeId, Processor::lfo2ShapeId })
+            checkRange (processor.apvts, shapeId, 0.0f, 4.0f, 0.0f);
+        for (const char* syncId : { Processor::lfo1SyncId, Processor::lfo2SyncId })
+            checkRange (processor.apvts, syncId, 0.0f, 1.0f, 0.0f);
+        for (const char* divisionId : { Processor::lfo1DivisionId, Processor::lfo2DivisionId })
+            checkRange (processor.apvts, divisionId, 0.0f, 6.0f, 4.0f);
+
+        // Routing: each slot has a source (0 or 1), a target (0 to 13, None by default) and a signed amount
+        for (int slot = 0; slot < Processor::slotCount; ++slot)
+        {
+            checkRange (processor.apvts, Processor::modSourceIds[slot], 0.0f, 1.0f, 0.0f);
+            checkRange (processor.apvts, Processor::modTargetIds[slot], 0.0f, 13.0f, 0.0f);
+            checkRange (processor.apvts, Processor::modAmountIds[slot], -100.0f, 100.0f, 0.0f);
+        }
 
         pass ("testParameters");
     }
@@ -732,6 +756,391 @@ namespace
         pass ("testLerpDriftIsHybrid");
     }
 
+
+    //==============================================================================
+    // LFO and modulation
+
+    // Sets one LFO. The shape index is 0 Sine, 1 Triangle, 2 Saw, 3 Square, 4 Sample & Hold.
+    void setLfo (Processor& p, int lfo, float rateHz, float shape, bool synced, float division)
+    {
+        setParameter (p.apvts, lfo == 0 ? Processor::lfo1RateId : Processor::lfo2RateId, rateHz);
+        setParameter (p.apvts, lfo == 0 ? Processor::lfo1ShapeId : Processor::lfo2ShapeId, shape);
+        setParameter (p.apvts, lfo == 0 ? Processor::lfo1SyncId : Processor::lfo2SyncId, synced ? 1.0f : 0.0f);
+        setParameter (p.apvts, lfo == 0 ? Processor::lfo1DivisionId : Processor::lfo2DivisionId, division);
+    }
+
+    // Routes one slot: source 0 is LFO 1, 1 is LFO 2. Target indices follow Processor::ModTarget.
+    void setRoute (Processor& p, int slot, int source, int target, float amount)
+    {
+        setParameter (p.apvts, Processor::modSourceIds[slot], (float) source);
+        setParameter (p.apvts, Processor::modTargetIds[slot], (float) target);
+        setParameter (p.apvts, Processor::modAmountIds[slot], amount);
+    }
+
+    // Timing offset of every note-on from its grid position, in samples.
+    std::vector<int64_t> timingOffsets (const std::vector<Delivered>& events)
+    {
+        std::vector<int64_t> offsets;
+        int64_t k = 0;
+
+        for (const auto& event : events)
+            if (event.message.isNoteOn())
+                offsets.push_back (event.time - (latency + k++ * sixteenthSamples));
+
+        return offsets;
+    }
+
+    // A quiet 1/16 patch with timing chaos at full drift, so Timing Range is audible.
+    void setTimingPatch (Processor& p, float timingRangeMs)
+    {
+        setPlain (p);
+        setParameter (p.apvts, Processor::rateId, 2.0f);
+        setParameter (p.apvts, Processor::lengthId, 16.0f);
+        setParameter (p.apvts, Processor::chaosId, 100.0f);
+        setParameter (p.apvts, Processor::timingRangeId, timingRangeMs);
+        setParameter (p.apvts, Processor::lerpId, 100.0f);
+    }
+
+    // The unmodulated event log from the committed code. Chaos 100, 1/16, Timing Range 25 ms, Lerp 80 %,
+    // 1500 blocks. With every LFO and routing parameter at its default, the output must match it exactly.
+    void testNoModulationIsIdentical()
+    {
+        struct Expected { int64_t time; bool noteOn; int note; int velocity; };
+        static const Expected expected[] = {
+        { 2405, true, 58, 84 },
+        { 6005, false, 58, 0 },
+        { 26011, true, 56, 100 },
+        { 29160, false, 56, 0 },
+        { 50027, true, 56, 101 },
+        { 53294, false, 56, 0 },
+        { 73938, true, 56, 102 },
+        { 77060, false, 56, 0 },
+        { 98050, true, 56, 100 },
+        { 101273, false, 56, 0 },
+        { 121973, true, 58, 103 },
+        { 125217, false, 58, 0 },
+        { 145979, true, 55, 100 },
+        { 149082, false, 55, 0 },
+        { 170069, true, 58, 101 },
+        { 173379, false, 58, 0 },
+        { 193899, true, 55, 103 },
+        { 196994, false, 55, 0 },
+        { 218086, true, 58, 99 },
+        { 221323, false, 58, 0 },
+        { 241962, true, 56, 104 },
+        { 245250, false, 56, 0 },
+        { 266012, true, 56, 98 },
+        { 269099, false, 56, 0 },
+        { 290095, true, 56, 102 },
+        { 293502, false, 56, 0 },
+        { 313910, true, 55, 100 },
+        { 316858, false, 55, 0 },
+        { 338187, true, 56, 100 },
+        { 341648, false, 56, 0 },
+        { 361919, true, 55, 98 },
+        { 364804, false, 55, 0 },
+        { 386170, true, 58, 103 },
+        { 389780, false, 58, 0 },
+        { 410482, true, 60, 95 },
+        { 414225, false, 60, 0 },
+        { 434415, true, 58, 90 },
+        { 438043, false, 58, 0 },
+        { 457898, true, 55, 101 },
+        { 460869, false, 55, 0 },
+        { 482170, true, 56, 99 },
+        { 485572, false, 56, 0 },
+        { 505814, true, 55, 103 },
+        { 508732, false, 55, 0 },
+        { 530245, true, 56, 98 },
+        { 533722, false, 56, 0 },
+        { 554007, true, 55, 95 },
+        { 556954, false, 55, 0 },
+        { 577772, true, 50, 98 },
+        { 580331, false, 50, 0 },
+        { 602569, true, 60, 99 },
+        { 606293, false, 60, 0 },
+        { 626818, true, 63, 95 },
+        { 631095, false, 63, 0 },
+        { 651072, true, 62, 110 },
+        { 654989, false, 62, 0 },
+        { 674360, true, 56, 97 },
+        { 677951, false, 56, 0 },
+        { 698638, true, 62, 95 },
+        { 702609, false, 62, 0 },
+        { 723011, true, 60, 108 },
+        { 726970, false, 60, 0 },
+        { 746417, true, 58, 99 },
+        { 749915, false, 58, 0 }
+
+        };
+
+        Processor processor;
+        setParameter (processor.apvts, Processor::chaosId, 100.0f);
+        setParameter (processor.apvts, Processor::rateId, 2.0f);
+        setParameter (processor.apvts, Processor::timingRangeId, 25.0f);
+        setParameter (processor.apvts, Processor::lerpId, 80.0f);
+        processor.prepareToPlay (sampleRate, blockSize);
+
+        int64_t sample = 0;
+        const auto events = run (processor, sample, 1500);
+        assert (events.size() == sizeof (expected) / sizeof (expected[0]));
+
+        for (size_t i = 0; i < events.size(); ++i)
+        {
+            assert (events[i].time == expected[i].time);
+            assert (events[i].message.isNoteOn() == expected[i].noteOn);
+            assert (events[i].message.getNoteNumber() == expected[i].note);
+            assert (events[i].message.getVelocity() == expected[i].velocity);
+        }
+
+        pass ("testNoModulationIsIdentical");
+    }
+
+    // An LFO on Timing Range moves the timing. At Amount 0 the LFO has no effect at all.
+    void testSineOnTimingRangeChangesOffsets()
+    {
+        auto offsetsFor = [] (float amount, float lfoHz)
+        {
+            Processor processor;
+            setTimingPatch (processor, 40.0f);
+            setLfo (processor, 0, lfoHz, 0.0f, false, 4.0f);
+            setRoute (processor, 0, 0, 2, amount);
+            processor.prepareToPlay (sampleRate, blockSize);
+
+            int64_t sample = 0;
+            return timingOffsets (run (processor, sample, 500));
+        };
+
+        const auto modulated = offsetsFor (100.0f, 1.0f);
+        const auto steadyOneHz = offsetsFor (0.0f, 1.0f);
+        const auto steadyFiveHz = offsetsFor (0.0f, 5.0f);
+
+        assert (modulated.size() > 40);
+        assert (steadyOneHz == steadyFiveHz);       // Amount 0: the LFO rate does not matter
+        assert (modulated != steadyOneHz);          // Amount 100: the timing changes
+
+        const auto [lowest, highest] = std::minmax_element (modulated.begin(), modulated.end());
+        assert (*highest - *lowest > 480);          // more than 10 ms of spread
+
+        pass ("testSineOnTimingRangeChangesOffsets");
+    }
+
+    // Opposite amounts move the timing in opposite directions around the unmodulated value.
+    void testBipolarAmountInvertsModulation()
+    {
+        auto offsetsFor = [] (float amount)
+        {
+            Processor processor;
+            setTimingPatch (processor, 25.0f);
+            setLfo (processor, 0, 1.0f, 0.0f, false, 4.0f);
+            setRoute (processor, 0, 0, 2, amount);
+            processor.prepareToPlay (sampleRate, blockSize);
+
+            int64_t sample = 0;
+            return timingOffsets (run (processor, sample, 500));
+        };
+
+        const auto plus = offsetsFor (100.0f);
+        const auto minus = offsetsFor (-100.0f);
+        const auto none = offsetsFor (0.0f);
+
+        assert (plus.size() == none.size() && minus.size() == none.size());
+
+        bool moved = false;
+        for (size_t k = 0; k < none.size(); ++k)
+        {
+            // Timing Range is linear, so the two offsets from the base are equal and opposite.
+            const int64_t sum = (plus[k] - none[k]) + (minus[k] - none[k]);
+            assert (std::abs (sum) <= 2);
+            moved = moved || std::abs (plus[k] - none[k]) > 10;
+        }
+
+        assert (moved);
+        pass ("testBipolarAmountInvertsModulation");
+    }
+
+    // A synced LFO on one bar repeats every four beats, and follows the host position.
+    void testSyncedLfoFollowsBeats()
+    {
+        Processor processor;
+        setParameter (processor.apvts, Processor::syncId, 1.0f);
+        setLfo (processor, 0, 0.25f, 0.0f, true, 2.0f);             // sine, 1 bar
+        processor.prepareToPlay (sampleRate, blockSize);
+
+        FakePlayHead playhead;
+        playhead.bpm = 120.0;
+        playhead.playing = true;
+        processor.setPlayHead (&playhead);
+
+        juce::AudioBuffer<float> audio (2, blockSize);
+        juce::MidiBuffer midi;
+
+        auto valueAt = [&] (double ppq)
+        {
+            playhead.ppq = ppq;
+            audio.clear();
+            midi.clear();
+            processor.processBlock (audio, midi);
+            return processor.getLfoValue (0);
+        };
+
+        assert (std::abs (valueAt (0.0) - valueAt (4.0)) < 1e-4f);   // one full cycle apart
+        assert (std::abs (valueAt (3.0) + 1.0f) < 1e-3f);            // three quarters: -1
+        assert (std::abs (valueAt (1.0) - 1.0f) < 1e-3f);            // one quarter: +1
+
+        processor.setPlayHead (nullptr);
+        pass ("testSyncedLfoFollowsBeats");
+    }
+
+    // A free LFO advances with the sample clock, at its rate in Hz.
+    void testFreeLfoRunsInHertz()
+    {
+        Processor processor;
+        setLfo (processor, 0, 1.0f, 0.0f, false, 4.0f);
+        processor.prepareToPlay (sampleRate, blockSize);
+
+        juce::AudioBuffer<float> audio (2, blockSize);
+        juce::MidiBuffer midi;
+
+        const int blocks = 70;
+        for (int block = 0; block < blocks; ++block)
+        {
+            audio.clear();
+            midi.clear();
+            processor.processBlock (audio, midi);
+        }
+
+        // The published values describe the start of the last block.
+        const double seconds = (blocks - 1) * (double) blockSize / sampleRate;
+        const double phase = seconds - std::floor (seconds);
+        assert (std::abs (processor.getLfoPhase (0) - (float) phase) < 1e-3f);
+        assert (std::abs (processor.getLfoValue (0) - (float) std::sin (2.0 * pi * phase)) < 1e-3f);
+
+        pass ("testFreeLfoRunsInHertz");
+    }
+
+    // Sample and hold keeps one value for each cycle, and the value changes between cycles.
+    void testSampleAndHoldHoldsPerCycle()
+    {
+        Processor processor;
+        setLfo (processor, 0, 1.0f, 4.0f, false, 4.0f);
+        processor.prepareToPlay (sampleRate, blockSize);
+
+        juce::AudioBuffer<float> audio (2, blockSize);
+        juce::MidiBuffer midi;
+        std::map<int, float> heldPerCycle;
+        int changes = 0;
+
+        for (int block = 0; block < 750; ++block)                  // 8 s at 1 Hz
+        {
+            audio.clear();
+            midi.clear();
+            processor.processBlock (audio, midi);
+
+            const double seconds = block * (double) blockSize / sampleRate;
+            const int cycle = (int) std::floor (seconds);
+            const float value = processor.getLfoValue (0);
+
+            assert (value >= -1.0f && value <= 1.0f);
+
+            const auto found = heldPerCycle.find (cycle);
+            if (found == heldPerCycle.end())
+            {
+                if (cycle > 0 && value != heldPerCycle[cycle - 1])
+                    ++changes;
+                heldPerCycle[cycle] = value;
+            }
+            else
+            {
+                assert (found->second == value);            // constant within the cycle
+            }
+        }
+
+        assert (heldPerCycle.size() >= 8);
+        assert (changes >= 4);
+        pass ("testSampleAndHoldHoldsPerCycle");
+    }
+
+    // Every target keeps its value in range, and the Velocity target always yields whole velocities from 1 to 127.
+    void testTargetsStayInRange()
+    {
+        const int targets[] = { 1, 4, 8, 9, 10, 11, 13 };          // Chaos, Lerp, Density, Gate, Swing, Velocity, Tempo
+
+        for (const int target : targets)
+        {
+            Processor processor;
+            setLfo (processor, 0, 1.0f, 0.0f, false, 4.0f);
+            setRoute (processor, 0, 0, target, 100.0f);
+            processor.prepareToPlay (sampleRate, blockSize);
+
+            int64_t sample = 0;
+            float largest = 0.0f;
+
+            for (int block = 0; block < 600; ++block)
+            {
+                for (const auto& event : run (processor, sample, 1))
+                    if (event.message.isNoteOn())
+                        assert (event.message.getVelocity() >= 1 && event.message.getVelocity() <= 127);
+
+                largest = std::max (largest, std::abs (processor.getTargetOffset ((Processor::ModTarget) target)));
+            }
+
+            assert (largest > 0.5f);                                // the target really moved
+            assert (largest <= 1.0f + 1e-6f);                       // and the offset stays within its range
+        }
+
+        pass ("testTargetsStayInRange");
+    }
+
+    // The routing and the LFO settings are saved with the session.
+    void testModulationStateRoundTrip()
+    {
+        Processor original;
+        setRoute (original, 1, 1, 9, -37.0f);                      // slot 2: LFO 2 to Gate, -37 %
+        setLfo (original, 1, 3.5f, 3.0f, false, 6.0f);             // LFO 2: square, 3.5 Hz
+
+        juce::MemoryBlock state;
+        original.getStateInformation (state);
+
+        Processor restored;
+        restored.setStateInformation (state.getData(), (int) state.getSize());
+
+        assert (getParameter (restored.apvts, Processor::modSourceIds[1]) == 1.0f);
+        assert (getParameter (restored.apvts, Processor::modTargetIds[1]) == 9.0f);
+        assert (std::abs (getParameter (restored.apvts, Processor::modAmountIds[1]) + 37.0f) < 1e-4f);
+        assert (getParameter (restored.apvts, Processor::lfo2ShapeId) == 3.0f);
+        assert (std::abs (getParameter (restored.apvts, Processor::lfo2RateId) - 3.5f) < 1e-3f);
+        assert (getParameter (restored.apvts, Processor::lfo2DivisionId) == 6.0f);
+
+        pass ("testModulationStateRoundTrip");
+    }
+
+    // The reported latency is fixed, whatever the routing does.
+    void testLatencyIgnoresModulation()
+    {
+        Processor processor;
+        setLfo (processor, 0, 1.0f, 0.0f, false, 4.0f);
+        setRoute (processor, 0, 0, 2, 100.0f);
+        processor.prepareToPlay (sampleRate, blockSize);
+
+        assert (processor.getLatencySamples() == 2400);
+        pass ("testLatencyIgnoresModulation");
+    }
+
+    // The editor paints with the modulation controls in use.
+    void testEditorWithModulation()
+    {
+        Processor processor;
+        setLfo (processor, 0, 2.0f, 1.0f, false, 4.0f);
+        setLfo (processor, 1, 0.5f, 4.0f, true, 2.0f);
+        setRoute (processor, 0, 0, 2, 60.0f);
+        setRoute (processor, 2, 1, 13, -40.0f);
+        processor.prepareToPlay (sampleRate, blockSize);
+        checkEditor (processor);
+
+        pass ("testEditorWithModulation");
+    }
+
     void testEditor()
     {
         Processor processor;
@@ -770,6 +1179,16 @@ int main()
     testLerpCurveEditing();
     testLerpCurveSurvivesStateRoundTrip();
     testLerpDriftIsHybrid();
+    testNoModulationIsIdentical();
+    testSineOnTimingRangeChangesOffsets();
+    testBipolarAmountInvertsModulation();
+    testSyncedLfoFollowsBeats();
+    testFreeLfoRunsInHertz();
+    testSampleAndHoldHoldsPerCycle();
+    testTargetsStayInRange();
+    testModulationStateRoundTrip();
+    testLatencyIgnoresModulation();
+    testEditorWithModulation();
     testEditor();
 
     std::puts ("All Micro-Timing Chaos plugin tests passed.");

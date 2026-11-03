@@ -195,7 +195,18 @@ The Lerp Curve group has two tabs. **Curve** is the editor above, with a live ma
 | **Tempo** | 40 – 240 BPM | 120 BPM | Used when the plugin runs freely. Disabled while Host Sync is on. |
 | **Host Sync** | on / off | off | Follows the host's tempo and position. When the transport stops, all notes end. The host tempo is shown under the button. |
 
-The left side of the editor shows the attractor's path, and the step grid. Filled columns are the steps that fire, and the outlined column is the playhead. Each dot is a recent note. Its height shows its timing shift, and its size shows its velocity. Hover any control to see what it does in the line at the bottom of the window.
+**LFO and modulation**
+
+| Control | Range | Default | Description |
+|---|---|---|---|
+| **LFO Rate** | 0.02 – 20 Hz | 0.25 Hz | Speed of each of the two LFOs. Disabled while that LFO is synced. |
+| **LFO Shape** | Sine, Triangle, Saw, Square, Sample & Hold | Sine | Waveform. Sample & Hold picks a new random level each cycle. |
+| **LFO Sync** / **Division** | on / off, 4 bars to 1/16 | off, 1/4 | Locks an LFO to musical time, with the cycle length set by the division. |
+| **Mod Source / Target / Amount** | LFO 1 or 2; 13 targets; −100 to +100 % | None, 0 % | Four routing slots. A slot sends an LFO to a control, with a signed amount. Targets include Chaos, Timing Range, the lerp amounts, Density, Gate, Swing, Velocity and Speed. |
+
+The full list, and the formulas, are in the [plugin README](plugins/MicroTimingChaos/README.md#lfo-and-modulation).
+
+The left side of the editor shows the attractor's path, the step grid, and the LFO and routing panel at the bottom. Filled columns are the steps that fire, and the outlined column is the playhead. Each dot is a recent note. Its height shows its timing shift, and its size shows its velocity. Hover any control to see what it does in the line at the bottom of the window.
 
 ### Latency
 
@@ -273,11 +284,11 @@ Eight CTest entries run six test executables:
 
 | Executable | Scope | Tests |
 |---|---|---|
-| `CoreDSPTests` | DSP primitives in `modules/core_dsp` | 26 |
+| `CoreDSPTests` | DSP primitives in `modules/core_dsp` | 28 |
 | `SuiteUITests` | Shared widgets and look and feel | 9 |
 | `SpectralDriftTests` | Spectral Drift processor and editor | 13 |
 | `DynamicSaturationTests` | Dynamic Saturation processor and editor | 10 |
-| `MicroTimingChaosTests` | Micro-Timing Chaos processor and editor | 23 |
+| `MicroTimingChaosTests` | Micro-Timing Chaos processor and editor | 33 |
 | `PluginHostTests` (×3) | Each built VST3 bundle, loaded through JUCE's own plugin host | 1 per plugin |
 
 The tests use `assert` with `NDEBUG` undefined, so they also check in Release builds. Without that, every check would be compiled out.
@@ -320,7 +331,7 @@ AudioPluginSuite/
 ├── AGENTS.md                       Project knowledge for coding agents (read first)
 ├── modules/
 │   ├── core_dsp/                   Header-only DSP primitives (no plugin code)
-│   │   ├── include/                CoreDSP.h, SaturationEngine.h, ChaosEngine.h, SpectralEngine.h, SequencerEngine.h
+│   │   ├── include/                CoreDSP.h, SaturationEngine.h, ChaosEngine.h, SpectralEngine.h, SequencerEngine.h, ModulationEngine.h
 │   │   ├── tests/                  DSPTests.cpp
 │   │   └── CMakeLists.txt
 │   └── suite_ui/                   Shared look and feel and visualiser widgets
@@ -332,7 +343,7 @@ AudioPluginSuite/
 ├── plugins/
 │   ├── SpectralDrift/              Source/ (processor, editor), tests/PluginTests.cpp, CMakeLists.txt
 │   ├── DynamicSaturation/          Source/ (processor, editor), tests/PluginTests.cpp, CMakeLists.txt
-│   └── MicroTimingChaos/           Source/ (processor, editor, lerp curve, preview, look and feel), Resources/, tests/PluginTests.cpp, CMakeLists.txt
+│   └── MicroTimingChaos/           Source/ (processor, editor, lerp curve, preview, LFO panel, look and feel), Resources/, tests/PluginTests.cpp, CMakeLists.txt
 ├── tests/
 │   ├── common/PluginTestUtils.h    Shared helpers for the plugin tests
 │   └── host/                       PluginHostTests: loads each built VST3 bundle
@@ -409,6 +420,7 @@ The build runs before the tests, since CTest needs the test executables to exist
 - **Micro-Timing Chaos** reports 50 ms of latency, so steps and passed-through notes are early by that amount until the host compensates. Hosts that ignore MIDI-effect latency will shift the whole sequence earlier by that amount.
 - **Micro-Timing Chaos** declares a stereo audio pass-through. Some hosts only load VST3 effects that have audio I/O, so this is the declared layout. The plugin does not touch the audio.
 - **Spectral Drift** is phase-only drift. Magnitudes are preserved by the drift itself, so the effect is most audible on sustained, harmonic material. Shift, tilt and gate are the magnitude-changing controls.
+- **Micro-Timing Chaos** LFOs are sampled at step times, so an LFO faster than the step rate can alias against the grid.
 - **Micro-Timing Chaos** Lerp Curve is piecewise linear between its five points, so the natural curve is a close approximation of the logarithm rather than an exact one.
 - **Dynamic Saturation** oversamples 2×. Very high drive and fold can still alias above the oversampled band.
 - Plugins are not code-signed or notarised, so macOS will ask for approval on first launch.

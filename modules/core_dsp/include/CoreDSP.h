@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include "ChaosEngine.h"
+#include "ModulationEngine.h"
 #include "SaturationEngine.h"
 #include "SequencerEngine.h"
 #include "SpectralEngine.h"

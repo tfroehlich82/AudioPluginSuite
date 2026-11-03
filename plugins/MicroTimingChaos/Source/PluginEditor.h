@@ -10,6 +10,7 @@
 #include "PluginProcessor.h"
 #include "LerpCurveEditor.h"
 #include "LerpPreview.h"
+#include "ModulationPanel.h"
 #include "MicroTimingChaosLookAndFeel.h"
 #include "SuiteLookAndFeel.h"
 #include "SuiteWidgets.h"
@@ -98,6 +99,9 @@ private:
     SuiteUI::SegmentedSelector lerpViewSelector { MicroTimingChaos::Palette::velocity };
     LerpCurveEditor curveEditor;
     LerpPreview lerpPreview;
+
+    // Modulation: two LFOs and four routing slots, at the bottom of the left column
+    ModulationPanel modulation { processor };
     SuiteUI::LabelledSlider lerpSlider { "LERP", juce::Slider::RotaryVerticalDrag };
     SuiteUI::LabelledSlider lerpXMultSlider { "X MULT", juce::Slider::RotaryVerticalDrag };
     SuiteUI::LabelledSlider lerpYMultSlider { "Y MULT", juce::Slider::RotaryVerticalDrag };

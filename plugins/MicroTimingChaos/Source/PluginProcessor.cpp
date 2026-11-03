@@ -7,6 +7,21 @@
 namespace
 {
     constexpr int midiChannel = 1;
+
+    // Synced divisions, in beats per cycle. Index order matches the Division choice parameter.
+    constexpr std::array<double, 7> divisionBeats { 16.0, 8.0, 4.0, 2.0, 1.0, 0.5, 0.25 };
+
+    /** Shows LFO rates with two decimals, such as "0.25 Hz". */
+    juce::String formatHz (float value, int) { return juce::String (value, 2) + " Hz"; }
+
+    /** A logarithmic range from start to end, so the knob moves in equal steps per octave. */
+    juce::NormalisableRange<float> logRange (float start, float end)
+    {
+        return juce::NormalisableRange<float> (
+            start, end,
+            [] (float s, float e, float n) { return s * std::pow (e / s, n); },
+            [] (float s, float e, float v) { return std::log (v / s) / std::log (e / s); });
+    }
 }
 
 MicroTimingChaosProcessor::MicroTimingChaosProcessor()
@@ -36,6 +51,41 @@ MicroTimingChaosProcessor::MicroTimingChaosProcessor()
     sync = apvts.getRawParameterValue (syncId);
     speed = apvts.getRawParameterValue (speedId);
 
+    const char* const lfoRateIds[lfoCount] = { lfo1RateId, lfo2RateId };
+    const char* const lfoShapeIds[lfoCount] = { lfo1ShapeId, lfo2ShapeId };
+    const char* const lfoSyncIds[lfoCount] = { lfo1SyncId, lfo2SyncId };
+    const char* const lfoDivisionIds[lfoCount] = { lfo1DivisionId, lfo2DivisionId };
+
+    for (int i = 0; i < lfoCount; ++i)
+    {
+        lfoRate[(size_t) i] = apvts.getRawParameterValue (lfoRateIds[i]);
+        lfoShape[(size_t) i] = apvts.getRawParameterValue (lfoShapeIds[i]);
+        lfoSync[(size_t) i] = apvts.getRawParameterValue (lfoSyncIds[i]);
+        lfoDivision[(size_t) i] = apvts.getRawParameterValue (lfoDivisionIds[i]);
+    }
+
+    for (int i = 0; i < slotCount; ++i)
+    {
+        modSource[(size_t) i] = apvts.getRawParameterValue (modSourceIds[i]);
+        modTarget[(size_t) i] = apvts.getRawParameterValue (modTargetIds[i]);
+        modAmount[(size_t) i] = apvts.getRawParameterValue (modAmountIds[i]);
+    }
+
+    // The parameter behind each routing target, used to convert offsets in its own range.
+    targetParams[(size_t) ModTarget::Chaos] = apvts.getParameter (chaosId);
+    targetParams[(size_t) ModTarget::TimingRange] = apvts.getParameter (timingRangeId);
+    targetParams[(size_t) ModTarget::VelocityChaos] = apvts.getParameter (velocityChaosId);
+    targetParams[(size_t) ModTarget::Lerp] = apvts.getParameter (lerpId);
+    targetParams[(size_t) ModTarget::LerpX] = apvts.getParameter (lerpXMultId);
+    targetParams[(size_t) ModTarget::LerpY] = apvts.getParameter (lerpYMultId);
+    targetParams[(size_t) ModTarget::LerpZ] = apvts.getParameter (lerpZMultId);
+    targetParams[(size_t) ModTarget::Density] = apvts.getParameter (densityId);
+    targetParams[(size_t) ModTarget::Gate] = apvts.getParameter (gateId);
+    targetParams[(size_t) ModTarget::Swing] = apvts.getParameter (swingId);
+    targetParams[(size_t) ModTarget::Velocity] = apvts.getParameter (baseVelocityId);
+    targetParams[(size_t) ModTarget::Speed] = apvts.getParameter (speedId);
+    targetParams[(size_t) ModTarget::Tempo] = apvts.getParameter (bpmId);
+
     for (int i = 0; i < curvePointCount; ++i)
     {
         const auto point = naturalCurvePoint (i);
@@ -44,6 +94,13 @@ MicroTimingChaosProcessor::MicroTimingChaosProcessor()
     }
 
     loadLerpCurveFromState();
+}
+
+juce::StringArray MicroTimingChaosProcessor::modTargetNames()
+{
+    // Must follow the ModTarget enum order exactly.
+    return { "None", "Chaos", "Timing Range", "Velocity Chaos", "Lerp", "Lerp X Mult", "Lerp Y Mult",
+             "Lerp Z Mult", "Density", "Gate", "Swing", "Velocity", "Speed", "Tempo" };
 }
 
 //==============================================================================
@@ -168,7 +225,7 @@ double MicroTimingChaosProcessor::getDisplayBpm() const
     const auto* playHead = getPlayHead();
     const auto position = playHead != nullptr ? playHead->getPosition()
                                               : juce::Optional<juce::AudioPlayHead::PositionInfo>();
-    return currentBpm (position);
+    return currentBpm (position, bpm->load());
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout MicroTimingChaosProcessor::createParameterLayout()
@@ -221,6 +278,42 @@ juce::AudioProcessorValueTreeState::ParameterLayout MicroTimingChaosProcessor::c
     params.push_back (std::make_unique<AudioParameterFloat> (
         ParameterID { speedId, 1 }, "Speed", NormalisableRange<float> (0.5f, 2.0f, 0.01f), 1.0f));
 
+    // LFO 1 and LFO 2
+    const StringArray lfoShapes { "Sine", "Triangle", "Saw", "Square", "Sample & Hold" };
+    const StringArray divisions { "4 bars", "2 bars", "1 bar", "1/2", "1/4", "1/8", "1/16" };
+
+    params.push_back (std::make_unique<AudioParameterFloat> (
+        ParameterID { lfo1RateId, 1 }, "LFO 1 Rate", logRange (0.02f, 20.0f), 0.25f, "Hz",
+        AudioProcessorParameter::genericParameter, formatHz, nullptr));
+    params.push_back (std::make_unique<AudioParameterChoice> (
+        ParameterID { lfo1ShapeId, 1 }, "LFO 1 Shape", lfoShapes, 0));
+    params.push_back (std::make_unique<AudioParameterBool> (ParameterID { lfo1SyncId, 1 }, "LFO 1 Sync", false));
+    params.push_back (std::make_unique<AudioParameterChoice> (
+        ParameterID { lfo1DivisionId, 1 }, "LFO 1 Division", divisions, 4));
+
+    params.push_back (std::make_unique<AudioParameterFloat> (
+        ParameterID { lfo2RateId, 1 }, "LFO 2 Rate", logRange (0.02f, 20.0f), 0.25f, "Hz",
+        AudioProcessorParameter::genericParameter, formatHz, nullptr));
+    params.push_back (std::make_unique<AudioParameterChoice> (
+        ParameterID { lfo2ShapeId, 1 }, "LFO 2 Shape", lfoShapes, 0));
+    params.push_back (std::make_unique<AudioParameterBool> (ParameterID { lfo2SyncId, 1 }, "LFO 2 Sync", false));
+    params.push_back (std::make_unique<AudioParameterChoice> (
+        ParameterID { lfo2DivisionId, 1 }, "LFO 2 Division", divisions, 4));
+
+    // Modulation routing
+    for (int slot = 0; slot < slotCount; ++slot)
+    {
+        const auto number = juce::String (slot + 1);
+
+        params.push_back (std::make_unique<AudioParameterChoice> (
+            ParameterID { modSourceIds[slot], 1 }, "Mod " + number + " Source", StringArray { "LFO 1", "LFO 2" }, 0));
+        params.push_back (std::make_unique<AudioParameterChoice> (
+            ParameterID { modTargetIds[slot], 1 }, "Mod " + number + " Target", modTargetNames(), 0));
+        params.push_back (std::make_unique<AudioParameterFloat> (
+            ParameterID { modAmountIds[slot], 1 }, "Mod " + number + " Amount",
+            NormalisableRange<float> (-100.0f, 100.0f, 0.1f), 0.0f, "%"));
+    }
+
     return { params.begin(), params.end() };
 }
 
@@ -229,6 +322,7 @@ void MicroTimingChaosProcessor::prepareToPlay (double newSampleRate, int)
     sampleRate = newSampleRate;
     streamSample = 0;
     beatPosition = 0.0;
+    lfoCycles = {};
     nextStep = 0;
     resyncNeeded = true;
     wasRunning = false;
@@ -273,7 +367,7 @@ juce::Optional<double> MicroTimingChaosProcessor::getHostBpm () const
     return juce::Optional<double>{};
 }
 
-double MicroTimingChaosProcessor::currentBpm (const juce::Optional<juce::AudioPlayHead::PositionInfo>& position) const
+double MicroTimingChaosProcessor::currentBpm (const juce::Optional<juce::AudioPlayHead::PositionInfo>& position, float freeTempo) const
 {
     if (sync->load() > 0.5f && position.hasValue())
     {
@@ -282,7 +376,75 @@ double MicroTimingChaosProcessor::currentBpm (const juce::Optional<juce::AudioPl
             return *hostBpm;
     }
 
-    return (double) bpm->load();
+    return (double) freeTempo;
+}
+
+double MicroTimingChaosProcessor::lfoCyclesAt (int lfoIndex, double timeSamples, double beat) const
+{
+    const auto index = (size_t) lfoIndex;
+
+    if (lfoSync[index]->load() > 0.5f)
+    {
+        const int division = std::clamp (juce::roundToInt (lfoDivision[index]->load()), 0, (int) divisionBeats.size() - 1);
+        return beat / divisionBeats[(size_t) division];
+    }
+
+    // Free LFOs: the count at the start of this block, plus the time since then.
+    const double secondsSinceBlockStart = (timeSamples - (double) streamSample) / sampleRate;
+    return lfoCycles[index] + (double) lfoRate[index]->load() * secondsSinceBlockStart;
+}
+
+MicroTimingChaosProcessor::TargetOffsets MicroTimingChaosProcessor::computeOffsets (double timeSamples, double beat) const
+{
+    TargetOffsets offsets {};
+
+    for (int slot = 0; slot < slotCount; ++slot)
+    {
+        const auto index = (size_t) slot;
+        const float amount = modAmount[index]->load() / 100.0f;
+        if (amount == 0.0f)
+            continue;
+
+        const int target = juce::roundToInt (modTarget[index]->load());
+        if (target <= 0 || target >= (int) ModTarget::count)
+            continue;
+
+        const int source = std::clamp (juce::roundToInt (modSource[index]->load()), 0, lfoCount - 1);
+        const auto shape = static_cast<CoreDSP::Modulation::LfoShape> (juce::roundToInt (lfoShape[(size_t) source]->load()));
+        const float value = CoreDSP::Modulation::lfoValue (shape, lfoCyclesAt (source, timeSamples, beat), lfoSeeds[(size_t) source]);
+
+        offsets[(size_t) target] += amount * value;
+    }
+
+    return offsets;
+}
+
+float MicroTimingChaosProcessor::modulatedValue (ModTarget target, float base, const TargetOffsets& offsets) const
+{
+    const auto index = (size_t) target;
+    auto* parameter = targetParams[index];
+
+    // Unmodulated values are returned exactly, so an idle routing changes nothing.
+    if (offsets[index] == 0.0f || parameter == nullptr)
+        return base;
+
+    const float normalised = parameter->convertTo0to1 (base);
+    return parameter->convertFrom0to1 (CoreDSP::Modulation::modulatedNormalised (normalised, offsets[index]));
+}
+
+float MicroTimingChaosProcessor::getLfoValue (int lfoIndex) const noexcept
+{
+    return lfoPublishedValue[(size_t) lfoIndex].load (std::memory_order_relaxed);
+}
+
+float MicroTimingChaosProcessor::getLfoPhase (int lfoIndex) const noexcept
+{
+    return lfoPublishedPhase[(size_t) lfoIndex].load (std::memory_order_relaxed);
+}
+
+float MicroTimingChaosProcessor::getTargetOffset (ModTarget target) const noexcept
+{
+    return targetOffsetPublished[(size_t) target].load (std::memory_order_relaxed);
 }
 
 void MicroTimingChaosProcessor::advanceAttractorTo (double beat, double speedValue)
@@ -398,26 +560,44 @@ void MicroTimingChaosProcessor::stopAllNotes()
 }
 
 void MicroTimingChaosProcessor::scheduleStep (std::int64_t stepIndex, double stepBeat, double blockStartBeat,
-                                               double samplesPerBeat, float chaosValue, float rangeMs, float speedValue)
+                                               double samplesPerBeat)
 {
     using namespace CoreDSP::Sequencer;
+
+    // Order of work for one step:
+    //   1. LFO offsets for this step's time and beat.
+    //   2. Every control, with its offset applied (unmodulated values are returned unchanged).
+    //   3. The lerp curve, evaluated on the modulated Chaos.
+    //   4. The step itself.
+    const double stepSample = (double) streamSample + (stepBeat - blockStartBeat) * samplesPerBeat;
+    const auto offsets = computeOffsets (stepSample, stepBeat);
+
+    for (size_t target = 0; target < offsets.size(); ++target)
+        targetOffsetPublished[target].store (offsets[target], std::memory_order_relaxed);
 
     const int lengthValue = patternLength.load (std::memory_order_relaxed);
     const int patternIndex = (int) (((stepIndex % lengthValue) + lengthValue) % lengthValue);
     const auto seedValue = (std::uint32_t) juce::roundToInt (seed->load());
-    const float densityValue = density->load() / 100.0f;
+    const float densityValue = modulatedValue (ModTarget::Density, density->load(), offsets) / 100.0f;
     const float effectiveDensity = densityValue > 0.0f ? log1p (densityValue * 0.99f) / log1p (0.99f) : 0.0f;
     const double stepLength = stepBeats (juce::roundToInt (rate->load()));
 
+    const float speedValue = modulatedValue (ModTarget::Speed, speed->load(), offsets);
     advanceAttractorTo (stepBeat, speedValue);
     publishTrailPoint();
 
+    const float chaosValue = modulatedValue (ModTarget::Chaos, chaos->load(), offsets) / 100.0f;
+    const float rangeMs = modulatedValue (ModTarget::TimingRange, timingRange->load(), offsets);
+
     // Hybrid lerp model: each axis drifts by curve(chaos) * its multiplier, scaled by the Lerp amount.
     const float curve = evaluateLerpCurve (chaosValue);
-    const float lerpAmount = std::clamp (lerp->load() / 100.0f, 0.0f, 1.0f);
-    const float timingAmount = std::clamp (curve * lerpXMult->load(), 0.0f, 1.0f) * lerpAmount;
-    const float pitchAmount = std::clamp (curve * lerpYMult->load(), 0.0f, 1.0f) * lerpAmount;
-    const float velocityAmount = std::clamp (curve * lerpZMult->load(), 0.0f, 1.0f) * lerpAmount;
+    const float lerpAmount = std::clamp (modulatedValue (ModTarget::Lerp, lerp->load(), offsets) / 100.0f, 0.0f, 1.0f);
+    const float xMult = modulatedValue (ModTarget::LerpX, lerpXMult->load(), offsets);
+    const float yMult = modulatedValue (ModTarget::LerpY, lerpYMult->load(), offsets);
+    const float zMult = modulatedValue (ModTarget::LerpZ, lerpZMult->load(), offsets);
+    const float timingAmount = std::clamp (curve * xMult, 0.0f, 1.0f) * lerpAmount;
+    const float pitchAmount = std::clamp (curve * yMult, 0.0f, 1.0f) * lerpAmount;
+    const float velocityAmount = std::clamp (curve * zMult, 0.0f, 1.0f) * lerpAmount;
 
     driftTiming.store (timingAmount, std::memory_order_relaxed);
     driftPitch.store (pitchAmount, std::memory_order_relaxed);
@@ -441,20 +621,20 @@ void MicroTimingChaosProcessor::scheduleStep (std::int64_t stepIndex, double ste
     const int degree = blendDegree (hashDegree, lorenzDegree, pitchAmount, count);
     const int note = notePitch (rootValue, scaleValue, degree);
 
-    const int velocity = velocityFor (juce::roundToInt (baseVelocity->load()),
-                                      velocityChaos->load() / 100.0f * velocityAmount, z);
+    const int velocity = velocityFor (juce::roundToInt (modulatedValue (ModTarget::Velocity, baseVelocity->load(), offsets)),
+                                      modulatedValue (ModTarget::VelocityChaos, velocityChaos->load(), offsets) / 100.0f * velocityAmount, z);
 
     const float timingOffset = timingOffsetMs (timingAmount, rangeMs, x);
 
     const double offsetSamples = (std::int64_t) std::llround (timingOffset * sampleRate / 1000.0);
-    const double swingSamples = swingBeats (stepIndex, swing->load() / 100.0f, stepLength) * samplesPerBeat;
+    const double swingSamples = swingBeats (stepIndex, modulatedValue (ModTarget::Swing, swing->load(), offsets) / 100.0f, stepLength) * samplesPerBeat;
 
     const double gridSample = (double) streamSample + (stepBeat - blockStartBeat) * samplesPerBeat;
     const auto onTarget = std::max<std::int64_t> (streamSample,
                                                   (std::int64_t) std::llround (gridSample + swingSamples)
                                                       + latencySamples + offsetSamples);
 
-    const double gateSamples = gateBeats (stepLength, gate->load() / 100.0f, pitchAmount, y) * samplesPerBeat;
+    const double gateSamples = gateBeats (stepLength, modulatedValue (ModTarget::Gate, gate->load(), offsets) / 100.0f, pitchAmount, y) * samplesPerBeat;
     const auto actualOn = queueNoteOn (note, velocity, onTarget);
     queueNoteOff (note, actualOn + std::max<std::int64_t> (1, (std::int64_t) std::llround (gateSamples)));
 
@@ -478,10 +658,35 @@ void MicroTimingChaosProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
 
     const int rateIndex = juce::roundToInt (rate->load());
     const double stepLength = CoreDSP::Sequencer::stepBeats (rateIndex);
-    const double samplesPerBeat = 60.0 / currentBpm (position) * sampleRate;
-    const float chaosValue = chaos->load() / 100.0f;
-    const float rangeMs = timingRange->load();
-    const float speedValue = speed->load();
+
+    // Follow the host position first, so the block-start LFO and tempo values use the right beat.
+    if (running && followHost)
+    {
+        const auto ppq = position->getPpqPosition();
+
+        if (ppq.hasValue() && (! wasRunning || std::abs (*ppq - beatPosition) > 1.0e-3))
+        {
+            beatPosition = *ppq;
+            resyncNeeded = true;
+        }
+    }
+
+    // Block-start values: the LFO positions shown in the UI, and the free tempo (Tempo can only move
+    // the tempo while Host Sync is off, which currentBpm() enforces).
+    const auto blockOffsets = computeOffsets ((double) streamSample, beatPosition);
+
+    for (int i = 0; i < lfoCount; ++i)
+    {
+        const auto index = (size_t) i;
+        const double cycles = lfoCyclesAt (i, (double) streamSample, beatPosition);
+        const auto shape = static_cast<CoreDSP::Modulation::LfoShape> (juce::roundToInt (lfoShape[index]->load()));
+
+        lfoPublishedPhase[index].store ((float) (cycles - std::floor (cycles)), std::memory_order_relaxed);
+        lfoPublishedValue[index].store (CoreDSP::Modulation::lfoValue (shape, cycles, lfoSeeds[index]), std::memory_order_relaxed);
+    }
+
+    const float freeTempo = modulatedValue (ModTarget::Tempo, bpm->load(), blockOffsets);
+    const double samplesPerBeat = 60.0 / currentBpm (position, freeTempo) * sampleRate;
 
     if (! running)
     {
@@ -493,17 +698,6 @@ void MicroTimingChaosProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     }
     else
     {
-        if (followHost)
-        {
-            const auto ppq = position->getPpqPosition();
-
-            if (ppq.hasValue() && (! wasRunning || std::abs (*ppq - beatPosition) > 1.0e-3))
-            {
-                beatPosition = *ppq;
-                resyncNeeded = true;
-            }
-        }
-
         wasRunning = true;
 
         const double blockStart = beatPosition;
@@ -521,7 +715,7 @@ void MicroTimingChaosProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
             const double stepBeat = (double) nextStep * stepLength;
 
             if (stepBeat >= blockStart - 1.0e-9)
-                scheduleStep (nextStep, stepBeat, blockStart, samplesPerBeat, chaosValue, rangeMs, speedValue);
+                scheduleStep (nextStep, stepBeat, blockStart, samplesPerBeat);
 
             ++nextStep;
         }
@@ -536,6 +730,11 @@ void MicroTimingChaosProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
         pending.emplace (streamSample + metadata.samplePosition + latencySamples, metadata.getMessage());
 
     midi.clear();
+
+    // Free LFOs keep running, whether or not the transport is moving (their phase never resets).
+    for (int i = 0; i < lfoCount; ++i)
+        if (lfoSync[(size_t) i]->load() <= 0.5f)
+            lfoCycles[(size_t) i] += (double) lfoRate[(size_t) i]->load() * numSamples / sampleRate;
 
     const std::int64_t blockEndSample = streamSample + numSamples;
 
