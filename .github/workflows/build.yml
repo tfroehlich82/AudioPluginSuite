@@ -45,9 +45,20 @@ jobs:
       - name: Run unit tests
         run: ctest --test-dir build -C Release --output-on-failure
 
+      # Only reached when the build and the tests pass. The run number keeps each run's artifact
+      # distinct, so an older download cannot be mistaken for the current build.
       - name: Upload VST3 bundles
         uses: actions/upload-artifact@v4
         with:
-          name: plugins-${{ runner.os }}
+          name: plugins-${{ runner.os }}-run${{ github.run_number }}
           path: build/plugins/*/*_artefacts/Release/VST3/*.vst3
           if-no-files-found: error
+
+      # When the tests fail, keep CTest's log so the failure can be read from the run page.
+      - name: Upload test log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-log-${{ runner.os }}-run${{ github.run_number }}
+          path: build/Testing/Temporary/LastTest.log
+          if-no-files-found: warn
