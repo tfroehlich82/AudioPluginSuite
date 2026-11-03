@@ -1,13 +1,18 @@
 # Audio Plugin Suite
 
 [![Build](https://github.com/tfroehlich82/AudioPluginSuite/actions/workflows/build.yml/badge.svg)](https://github.com/tfroehlich82/AudioPluginSuite/actions/workflows/build.yml)
-![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white)
+![C++18](https://img.shields.io/badge/C%2B%2B-18-00599C?logo=cplusplus&logoColor=white)
 ![JUCE](https://img.shields.io/badge/JUCE-7.0.9-8A2BE2)
 ![Formats](https://img.shields.io/badge/formats-VST3%20%7C%20AU%20%7C%20Standalone-informational)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS-lightgrey)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-Three creative audio plugins built with [JUCE](https://juce.com) and C++17: an FFT phase-drift processor with spectral shaping, a dynamic saturation stage with an oversampled shaper, and a chaos-driven MIDI micro-timing sequencer. Every plugin ships with its own dark, neon-accented interface and real-time visualisers.
+Creative audio plugins built with [JUCE](https://juce.com) and C++18: 
+ - an FFT phase-drift processor with spectral shaping
+ - a dynamic saturation stage with an oversampled shaper
+ - and a chaos-driven MIDI micro-timing sequencer. 
+
+Every plugin ships with its own dark, neon-accented interface and real-time visualisers.
 
 | Plugin | Type | What it does |
 |---|---|---|
@@ -405,7 +410,7 @@ The build runs before the tests, since CTest needs the test executables to exist
 
 ### Coding conventions
 
-- C++17. No compiler extensions; `CMAKE_CXX_EXTENSIONS` is `OFF`.
+- C++18. No compiler extensions; `CMAKE_CXX_EXTENSIONS` is `OFF`.
 - Namespaces: `CoreDSP::…` for DSP, `SuiteUI::…` for the UI module.
 - Audio-thread code is allocation-free and lock-free. Allocate in `prepareToPlay` and in constructors.
 - Any function that runs per sample is marked `noexcept`.
