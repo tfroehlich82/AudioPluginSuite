@@ -1,1311 +1,253 @@
 #include "LerpCurveEditor.h"
 
-namespace {
-    constexpr int controlPointsCount = 5;
-    constexpr float pointSpacing = 0.25f;
-    constexpr float curveWidth = 0.8f;
-    constexpr float gridPadding = 0.15f;
+#include "MicroTimingChaosLookAndFeel.h"
 
-    juce::Point<float> interpolate (const std::vector<juce::Point<float>>& points, float t)
-    {
-        const float step = 1.0f / (controlPointsCount - 1);
-        const int index = (int) std::min((int) std::ceil(t / step), controlPointsCount - 1);
-        const float alpha = (index + 1) * step - t;
-        const auto& p1 = points[index];
-        const auto& p2 = points[(index + 1) % points.size()];
-        return { p1.x + (p2.x - p1.x) * alpha, p1.y + (p2.y - p1.y) * alpha };
-    }
+namespace
+{
+    namespace Palette = MicroTimingChaos::Palette;
 
-    juce::Point<float> evaluateCurve (const std::vector<juce::Point<float>>& points, float t)
-    {
-        if (t < 0.0f) return { 0.0f, 0.0f };
-        if (t > 1.0f) return { 1.0f, points.back().y };
-
-        const auto curve = interpolate (points, t);
-        const float x = t;
-        const float y = curve.y;
-
-        const float dx = t - x;
-        const float dy = y - curve.y;
-        const float dist = std::sqrt (dx * dx + dy * dy);
-
-        const float angle = std::atan2 (dy, dx);
-        const float scale = std::min (1.0f, curveWidth / (dist + 0.0001f));
-
-        const float sx = x + dx * scale;
-        const float sy = y + dy * scale;
-
-        return { sx, sy };
-    }
+    constexpr float pointRadius = 5.0f;
+    constexpr float grabRadius = 14.0f;
+    constexpr int curveSamples = 64;
 }
 
-LerpCurveEditor::LerpCurveEditor (ViewMode mode)
-    : viewMode (mode)
+LerpCurveEditor::LerpCurveEditor (MicroTimingChaosProcessor& p)
+    : processor (p)
 {
-    setOpaque (true);
-    setWantsKeyboardFocus (false);
-
-    // Lerp slider
-    lerpSlider = std::make_unique<juce::Slider> (juce::Slider::LinearHorizontal);
-    lerpSlider->setRange (0.0f, 1.0f, 0.001f);
-    lerpSlider->setTextValueSuffix (" Lerp");
-    lerpSlider->setTextBoxStyle (juce::Slider::TextBoxOnly, true, 50, 20);
-    addAndMakeVisible (lerpSlider.get());
-
-    // Chaos slider
-    chaosSlider = std::make_unique<juce::Slider> (juce::Slider::LinearHorizontal);
-    chaosSlider->setRange (0.0f, 1.0f, 0.001f);
-    chaosSlider->setTextValueSuffix (" Chaos");
-    chaosSlider->setTextBoxStyle (juce::Slider::TextBoxOnly, true, 50, 20);
-    addAndMakeVisible (chaosSlider.get());
-
-    if (viewMode == ViewMode::Preview)
-    {
-        setBounds (20, 20, 250, 40);
-        setSize (350, 40);
-    }
-    else
-    {
-        setBounds (0, 0, 320, 120);
-        setSize (320, 120);
-    }
+    setOpaque (false);
 }
 
-void LerpCurveEditor::setViewMode (ViewMode mode)
+void LerpCurveEditor::setChaosValue (float chaos)
 {
-    viewMode = mode;
+    const float clamped = juce::jlimit (0.0f, 1.0f, chaos);
 
-    if (mode == ViewMode::Preview)
+    if (clamped != chaosValue)
     {
-        setSize (350, 40);
-        repaint();
-    }
-    else
-    {
-        setSize (320, 120);
+        chaosValue = clamped;
         repaint();
     }
 }
 
-ViewMode LerpCurveEditor::getViewMode() const noexcept
+juce::Rectangle<float> LerpCurveEditor::plotArea() const
 {
-    return viewMode;
+    // Room on the left for the drift scale and at the bottom for the chaos scale.
+    auto area = getLocalBounds().toFloat().reduced (10.0f, 10.0f);
+    area.removeFromLeft (20.0f);
+    area.removeFromBottom (18.0f);
+    return area;
 }
 
-void LerpCurveEditor::setControlPoints (const std::vector<juce::Point<float>>& points)
+juce::Point<float> LerpCurveEditor::toPlot (juce::Point<float> curvePoint) const
 {
-    controlPoints = points;
-    updateCurve();
-    repaint();
+    const auto area = plotArea();
+    return { area.getX() + curvePoint.x * area.getWidth(),
+             area.getBottom() - curvePoint.y * area.getHeight() };
 }
 
-std::vector<juce::Point<float>> LerpCurveEditor::getControlPoints() const
+juce::Point<float> LerpCurveEditor::fromPlot (juce::Point<float> position) const
 {
-    return controlPoints;
+    const auto area = plotArea();
+    return { juce::jlimit (0.0f, 1.0f, (position.x - area.getX()) / area.getWidth()),
+             juce::jlimit (0.0f, 1.0f, (area.getBottom() - position.y) / area.getHeight()) };
 }
 
-void LerpCurveEditor::setMultipliers (const juce::Point<float>& multipliers)
+int LerpCurveEditor::nearestPoint (juce::Point<float> position) const
 {
-    multipliers = multipliers;
-    repaint();
-}
+    const auto points = processor.getLerpCurve();
 
-juce::Point<float> LerpCurveEditor::getMultipliers() const
-{
-    return multipliers;
-}
+    int best = -1;
+    float bestDistance = grabRadius;
 
-void LerpCurveEditor::setLerpValue (float value)
-{
-    lerpValue = std::clamp (value, 0.0f, 1.0f);
-    if (viewMode == ViewMode::Preview)
-        lerpSlider->setValue (lerpValue, juce::dontSendNotification());
-    repaint();
-}
-
-float LerpCurveEditor::getLerpValue() const
-{
-    return lerpValue;
-}
-
-void LerpCurveEditor::setChaosValue (float value)
-{
-    chaosValue = std::clamp (value, 0.0f, 1.0f);
-    if (viewMode == ViewMode::Preview)
-        chaosSlider->setValue (chaosValue, juce::dontSendNotification());
-    repaint();
-}
-
-float LerpCurveEditor::getChaosValue() const
-{
-    return chaosValue;
-}
-
-juce::Colour LerpCurveEditor::getCurveColour() const noexcept
-{
-    return juce::Colour (0xff7dff5a);
-}
-
-juce::Colour LerpCurveEditor::getMultiplierColour(int axis) const noexcept
-{
-    static const juce::Colour colours[] = {
-        juce::Colour (0xff2de2ff), // X - timing (cyan)
-        juce::Colour (0xffff9f1c), // Y - pitch (amber)
-        juce::Colour (0xff7dff5a)  // Z - velocity (lime)
-    };
-    return axis >= 0 && axis < 3 ? colours[axis] : juce::Colour (0xff7dff5a);
-}
-
-void LerpCurveEditor::updateCurve()
-{
-    if (controlPoints.empty())
+    for (int i = 0; i < (int) points.size(); ++i)
     {
-        controlPoints.resize (controlPointsCount, { 0.0f, 0.0f });
-        for (int i = 1; i < controlPointsCount; ++i)
-            controlPoints[i] = { (float) i / (controlPointsCount - 1), 0.0f };
+        const float distance = toPlot (points[(size_t) i]).getDistanceFrom (position);
+        if (distance <= bestDistance)
+        {
+            bestDistance = distance;
+            best = i;
+        }
     }
 
-    const float x = chaosValue;
-    const auto curve = interpolate (controlPoints, x);
-    const float y = curve.y;
-    const float dx = x - curve.x;
-    const float dy = y - curve.y;
-    const float dist = std::sqrt (dx * dx + dy * dy);
-    const float angle = std::atan2 (dy, dx);
-    const float scale = std::min (1.0f, curveWidth / (dist + 0.0001f));
-    const float sx = x + dx * scale;
-    const float sy = y + dy * scale;
+    return best;
+}
 
-    const float lerpX = multipliers.x;
-    const float lerpY = multipliers.y;
-    const float lerpZ = multipliers.z;
+juce::Path LerpCurveEditor::curvePath (bool natural) const
+{
+    const auto area = plotArea();
+    juce::Path path;
 
-    const float driftX = lerpX * (1.0f - sx);
-    const float driftY = lerpY * (1.0f - sy);
-    const float driftZ = lerpZ * (1.0f - sy);
-
-    if (viewMode == ViewMode::Preview)
+    for (int i = 0; i <= curveSamples; ++i)
     {
-        lerpSlider->setValue (lerpValue, juce::dontSendNotification());
-        chaosSlider->setValue (chaosValue, juce::dontSendNotification());
+        const float t = (float) i / (float) curveSamples;
+        const float value = natural ? MicroTimingChaosProcessor::naturalCurveValue (t)
+                                    : processor.evaluateLerpCurve (t);
+        const juce::Point<float> point (area.getX() + t * area.getWidth(), area.getBottom() - value * area.getHeight());
+
+        if (i == 0)
+            path.startNewSubPath (point);
+        else
+            path.lineTo (point);
     }
+
+    return path;
 }
 
 void LerpCurveEditor::paint (juce::Graphics& g)
 {
-    g.setColour (juce::Colour (0xff11141a));
-    g.fillRect (getLocalBounds());
-
     const auto bounds = getLocalBounds().toFloat();
-    const float width = bounds.getWidth();
-    const float height = bounds.getHeight();
+    const auto area = plotArea();
+    const auto accent = Palette::velocity;
 
-    if (viewMode == ViewMode::Preview)
-    {
-        // Preview view: show timing/pitch/velocity deviations
-        const float yPerAxis = height / 3.0f;
-        const float xOffset = 10.0f;
-        const float yOffset = height / 2.0f;
-
-        g.setColour (juce::Colour (0xff333744));
-        g.drawRect (xOffset, yOffset - yPerAxis * 2, width - 2 * xOffset, yPerAxis * 2, 1.0f);
-        g.drawRect (xOffset, yOffset - yPerAxis, width - 2 * xOffset, yPerAxis, 1.0f);
-        g.drawRect (xOffset, yOffset, width - 2 * xOffset, yPerAxis, 1.0f);
-
-        g.setFont (juce::Font (8.0f));
-        g.setColour (juce::Colour (0xff555866));
-        g.drawText (juce::String (driftX * 100.0f) + "%  (timing)", xOffset, yOffset - yPerAxis * 1.7f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftY * 100.0f) + "%  (pitch)", xOffset, yOffset - yPerAxis * 0.5f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftZ * 100.0f) + "%  (velocity)", xOffset, yOffset + yPerAxis * 0.3f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-
-        return;
-    }
-
-    // Curve view: control points and curve
-    const float padding = 20.0f;
-    const float graphWidth = bounds.getWidth() - 2 * padding;
-    const float graphHeight = bounds.getHeight() - 2 * padding;
+    g.setColour (Palette::panel);
+    g.fillRoundedRectangle (bounds, 6.0f);
 
     // Grid
-    g.setColour (juce::Colour (0xff222633));
-    g.drawRect (padding, padding, graphWidth, graphHeight, 1.0f);
-
-    // Horizontal grid lines
+    g.setColour (Palette::track.withAlpha (0.6f));
     for (int i = 0; i <= 4; ++i)
     {
-        const float y = padding + graphHeight * i / 4.0f;
-        g.drawHorizontalLine (y, padding, padding + graphWidth, 1.0f);
+        const float fraction = (float) i / 4.0f;
+        g.drawLine (area.getX() + fraction * area.getWidth(), area.getY(), area.getX() + fraction * area.getWidth(), area.getBottom(), 1.0f);
+        g.drawLine (area.getX(), area.getBottom() - fraction * area.getHeight(), area.getRight(), area.getBottom() - fraction * area.getHeight(), 1.0f);
     }
 
-    // Vertical grid lines
-    for (int i = 0; i <= 4; ++i)
-    {
-        const float x = padding + graphWidth * i / 4.0f;
-        g.drawVerticalLine (x, padding, padding + graphHeight, 1.0f);
-    }
+    // Natural reference curve, dashed
+    const float dashes[] = { 4.0f, 4.0f };
+    juce::Path dashed;
+    juce::PathStrokeType (1.0f).createDashedStroke (dashed, curvePath (true), dashes, 2);
+    g.setColour (Palette::textDim.withAlpha (0.4f));
+    g.fillPath (dashed);
 
-    // Axis labels
-    g.setColour (juce::Colour (0xff555866));
-    g.setFont (juce::Font (9.0f));
+    // Curve: filled area, glow and line
+    const auto curve = curvePath (false);
 
-    // X axis (Chaos 0–1)
-    g.drawText ("0", padding + graphWidth * 0.2f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.drawText ("1", padding + graphWidth * 0.8f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Chaos", padding, padding + graphHeight * 0.95f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
+    juce::Path fill (curve);
+    fill.lineTo (area.getBottomRight());
+    fill.lineTo (area.getBottomLeft());
+    fill.closeSubPath();
 
-    // Y axis (Drift 0–1)
-    g.drawText ("0", padding, padding + graphHeight * 0.05f, juce::Justification::centred);
-    g.drawText ("1", padding, padding + graphHeight * 0.85f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Drift", padding, padding + graphHeight * 0.05f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
+    g.setGradientFill (juce::ColourGradient (accent.withAlpha (0.28f), area.getX(), area.getY(),
+                                             accent.withAlpha (0.0f), area.getX(), area.getBottom(), false));
+    g.fillPath (fill);
+
+    g.setColour (accent.withAlpha (0.22f));
+    g.strokePath (curve, juce::PathStrokeType (6.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    g.setColour (accent);
+    g.strokePath (curve, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+    // Live marker at the current chaos value
+    const float markerX = area.getX() + chaosValue * area.getWidth();
+    const float driftNow = processor.evaluateLerpCurve (chaosValue);
+    const auto markerPoint = toPlot ({ chaosValue, driftNow });
+
+    g.setColour (Palette::text.withAlpha (0.25f));
+    g.drawLine (markerX, area.getY(), markerX, area.getBottom(), 1.0f);
+    g.setColour (accent);
+    g.fillEllipse (markerPoint.x - 4.0f, markerPoint.y - 4.0f, 8.0f, 8.0f);
 
     // Control points
-    for (int i = 0; i < (int) controlPoints.size(); ++i)
+    const auto points = processor.getLerpCurve();
+    for (int i = 0; i < (int) points.size(); ++i)
     {
-        const float x = padding + controlPoints[i].x * graphWidth;
-        const float y = padding + graphHeight - controlPoints[i].y * graphHeight;
+        const auto p = toPlot (points[(size_t) i]);
+        const bool highlighted = i == activePoint || i == hoverPoint;
+        const float radius = highlighted ? pointRadius * 1.35f : pointRadius;
 
-        // Draw control point
-        const float radius = 4.0f;
-        g.setColour (getCurveColour());
-        g.drawEllipse (x - radius, y - radius, radius * 2.0f, radius * 2.0f, 0.0f, juce::jmax (0.0f, 360.0f - i * 72.0f));
+        g.setColour (Palette::panel);
+        g.fillEllipse (p.x - radius, p.y - radius, radius * 2.0f, radius * 2.0f);
 
-        // Draw point label
-        g.setColour (juce::Colour (0xff7dff5a));
-        g.setFont (juce::Font (8.0f));
-        const float labelX = x + 12.0f;
-        const float labelY = y - 12.0f;
-        g.drawEllipse (labelX - 3.0f, labelY - 3.0f, 6.0f, 6.0f, 0.0f, 60.0f);
+        g.setColour (highlighted ? Palette::text : accent);
+        g.drawEllipse (p.x - radius, p.y - radius, radius * 2.0f, radius * 2.0f, 2.0f);
     }
 
-    // Curve
-    const float pointsT = 0.0f;
-    const float pointsX = controlPoints[0].x;
-    const float pointsY = controlPoints[0].y;
-    const float dx = pointsX - 0.0f;
-    const float dy = pointsY - 0.0f;
-    const float dist = std::sqrt (dx * dx + dy * dy);
-    const float angle = std::atan2 (dy, dx);
-    const float scale = std::min (1.0f, curveWidth / (dist + 0.0001f));
-    const float sx = pointsX + dx * scale;
-    const float sy = pointsY + dy * scale;
-
-    const float lerpX = multipliers.x;
-    const float lerpY = multipliers.y;
-    const float lerpZ = multipliers.z;
-
-    const float driftX = lerpX * (1.0f - sx);
-    const float driftY = lerpY * (1.0f - sy);
-    const float driftZ = lerpZ * (1.0f - sy);
-
-    const float curveX = chaosValue;
-    const auto curve = interpolate (controlPoints, chaosValue);
-    const float curveY = curve.y;
-    const float curveDx = chaosValue - curve.x;
-    const float curveDy = curveY - curve.y;
-    const float curveDist = std::sqrt (curveDx * curveDx + curveDy * curveDy);
-    const float curveAngle = std::atan2 (curveDy, curveDx);
-    const float curveScale = std::min (1.0f, curveWidth / (curveDist + 0.0001f));
-    const float curveSx = chaosValue + curveDx * curveScale;
-    const float curveSy = curveY + curveDy * curveScale;
-
-    const float curveDriftX = lerpX * (1.0f - curveSx);
-    const float curveDriftY = lerpY * (1.0f - curveSy);
-    const float curveDriftZ = lerpZ * (1.0f - curveSy);
-
-    const float previewX = lerpValue;
-    const auto previewCurve = interpolate (controlPoints, previewX);
-    const float previewY = previewCurve.y;
-    const float previewDx = previewX - previewCurve.x;
-    const float previewDy = previewY - previewCurve.y;
-    const float previewDist = std::sqrt (previewDx * previewDx + previewDy * previewDy);
-    const float previewAngle = std::atan2 (previewDy, previewDx);
-    const float previewScale = std::min (1.0f, curveWidth / (previewDist + 0.0001f));
-    const float previewSx = previewX + previewDx * previewScale;
-    const float previewSy = previewY + previewDy * previewScale;
-
-    const float previewDriftX = lerpX * (1.0f - previewSx);
-    const float previewDriftY = lerpY * (1.0f - previewSy);
-    const float previewDriftZ = lerpZ * (1.0f - previewSy);
-
-    if (viewMode == ViewMode::Preview)
+    // Readout: live mapping, or the selected point
+    juce::String readout;
+    if (activePoint >= 0)
     {
-        const float yPerAxis = height / 3.0f;
-        const float xOffset = 10.0f;
-        const float yOffset = height / 2.0f;
+        const auto& point = points[(size_t) activePoint];
+        readout = "Point " + juce::String (activePoint + 1) + ":  chaos " + juce::String (point.x, 2)
+                + "  ->  drift " + juce::String (point.y, 2);
+    }
+    else
+    {
+        readout = "Chaos " + juce::String (chaosValue, 2) + "  ->  drift " + juce::String (driftNow, 2);
+    }
 
-        g.setColour (juce::Colour (0xff333744));
-        g.drawRect (xOffset, yOffset - yPerAxis * 2, width - 2 * xOffset, yPerAxis * 2, 1.0f);
-        g.drawRect (xOffset, yOffset - yPerAxis, width - 2 * xOffset, yPerAxis, 1.0f);
-        g.drawRect (xOffset, yOffset, width - 2 * xOffset, yPerAxis, 1.0f);
+    g.setColour (Palette::text);
+    g.setFont (juce::Font (11.0f, juce::Font::bold));
+    g.drawText (readout, area.reduced (8.0f, 4.0f), juce::Justification::topLeft);
 
-        g.setFont (juce::Font (8.0f));
-        g.setColour (juce::Colour (0xff555866));
-        g.drawText (juce::String (driftX * 100.0f) + "%  (timing)", xOffset, yOffset - yPerAxis * 1.7f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftY * 100.0f) + "%  (pitch)", xOffset, yOffset - yPerAxis * 0.5f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftZ * 100.0f) + "%  (velocity)", xOffset, yOffset + yPerAxis * 0.3f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
+    // Axis labels: the drift scale on the left (rotated), the chaos scale underneath
+    g.setColour (Palette::textDim);
+    g.setFont (juce::Font (9.0f));
+    g.drawText ("1", juce::Rectangle<float> (bounds.getX() + 4.0f, area.getY() - 4.0f, 14.0f, 12.0f), juce::Justification::centredRight);
+    g.drawText ("0", juce::Rectangle<float> (bounds.getX() + 4.0f, area.getBottom() - 8.0f, 14.0f, 12.0f), juce::Justification::centredRight);
 
+    const float labelX = bounds.getX() + 10.0f;
+    g.saveState();
+    g.addTransform (juce::AffineTransform::rotation (-juce::MathConstants<float>::halfPi, labelX, area.getCentreY()));
+    g.drawText ("DRIFT", juce::Rectangle<float> (labelX - 30.0f, area.getCentreY() - 6.0f, 60.0f, 12.0f), juce::Justification::centred);
+    g.restoreState();
+
+    g.drawText ("CHAOS  0 - 1", juce::Rectangle<float> (area.getX(), area.getBottom() + 2.0f, area.getWidth(), 14.0f), juce::Justification::centred);
+}
+
+void LerpCurveEditor::mouseMove (const juce::MouseEvent& e)
+{
+    const int hit = nearestPoint (e.position);
+
+    if (hit != hoverPoint)
+    {
+        hoverPoint = hit;
+        repaint();
+    }
+}
+
+void LerpCurveEditor::mouseExit (const juce::MouseEvent&)
+{
+    if (hoverPoint != -1)
+    {
+        hoverPoint = -1;
+        repaint();
+    }
+}
+
+void LerpCurveEditor::mouseDown (const juce::MouseEvent& e)
+{
+    const int hit = nearestPoint (e.position);
+
+    if (hit < 0)
         return;
+
+    if (e.mods.isPopupMenu())
+    {
+        processor.setLerpCurvePoint (hit, MicroTimingChaosProcessor::naturalCurvePoint (hit));
+    }
+    else
+    {
+        activePoint = hit;
     }
 
-    // Axis labels
-    g.setColour (juce::Colour (0xff555866));
-    g.setFont (juce::Font (9.0f));
+    repaint();
+}
 
-    // X axis (Chaos 0–1)
-    g.drawText ("0", padding + graphWidth * 0.2f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.drawText ("1", padding + graphWidth * 0.8f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Chaos", padding, padding + graphHeight * 0.95f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Y axis (Drift 0–1)
-    g.drawText ("0", padding, padding + graphHeight * 0.05f, juce::Justification::centred);
-    g.drawText ("1", padding, padding + graphHeight * 0.85f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Drift", padding, padding + graphHeight * 0.05f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Control points
-    for (int i = 0; i < (int) controlPoints.size(); ++i)
-    {
-        const float x = padding + controlPoints[i].x * graphWidth;
-        const float y = padding + graphHeight - controlPoints[i].y * graphHeight;
-
-        const float radius = 4.0f;
-        g.setColour (getCurveColour());
-        g.drawEllipse (x - radius, y - radius, radius * 2.0f, radius * 2.0f, 0.0f, juce::jmax (0.0f, 360.0f - i * 72.0f));
-
-        g.setColour (juce::Colour (0xff7dff5a));
-        g.setFont (juce::Font (8.0f));
-        const float labelX = x + 12.0f;
-        const float labelY = y - 12.0f;
-        g.drawEllipse (labelX - 3.0f, labelY - 3.0f, 6.0f, 6.0f, 0.0f, 60.0f);
-    }
-
-    // Curve
-    const float pointsT = 0.0f;
-    const float pointsX = controlPoints[0].x;
-    const float pointsY = controlPoints[0].y;
-    const float dx = pointsX - 0.0f;
-    const float dy = pointsY - 0.0f;
-    const float dist = std::sqrt (dx * dx + dy * dy);
-    const float angle = std::atan2 (dy, dx);
-    const float scale = std::min (1.0f, curveWidth / (dist + 0.0001f));
-    const float sx = pointsX + dx * scale;
-    const float sy = pointsY + dy * scale;
-
-    const float lerpX = multipliers.x;
-    const float lerpY = multipliers.y;
-    const float lerpZ = multipliers.z;
-
-    const float driftX = lerpX * (1.0f - sx);
-    const float driftY = lerpY * (1.0f - sy);
-    const float driftZ = lerpZ * (1.0f - sy);
-
-    const float curveX = chaosValue;
-    const auto curve = interpolate (controlPoints, chaosValue);
-    const float curveY = curve.y;
-    const float curveDx = chaosValue - curve.x;
-    const float curveDy = curveY - curve.y;
-    const float curveDist = std::sqrt (curveDx * curveDx + curveDy * curveDy);
-    const float curveAngle = std::atan2 (curveDy, curveDx);
-    const float curveScale = std::min (1.0f, curveWidth / (curveDist + 0.0001f));
-    const float curveSx = chaosValue + curveDx * curveScale;
-    const float curveSy = curveY + curveDy * curveScale;
-
-    const float curveDriftX = lerpX * (1.0f - curveSx);
-    const float curveDriftY = lerpY * (1.0f - curveSy);
-    const float curveDriftZ = lerpZ * (1.0f - curveSy);
-
-    const float previewX = lerpValue;
-    const auto previewCurve = interpolate (controlPoints, previewX);
-    const float previewY = previewCurve.y;
-    const float previewDx = previewX - previewCurve.x;
-    const float previewDy = previewY - previewCurve.y;
-    const float previewDist = std::sqrt (previewDx * previewDx + previewDy * previewDy);
-    const float previewAngle = std::atan2 (previewDy, previewDx);
-    const float previewScale = std::min (1.0f, curveWidth / (previewDist + 0.0001f));
-    const float previewSx = previewX + previewDx * previewScale;
-    const float previewSy = previewY + previewDy * previewScale;
-
-    const float previewDriftX = lerpX * (1.0f - previewSx);
-    const float previewDriftY = lerpY * (1.0f - previewSy);
-    const float previewDriftZ = lerpZ * (1.0f - previewSy);
-
-    if (viewMode == ViewMode::Preview)
-    {
-        const float yPerAxis = height / 3.0f;
-        const float xOffset = 10.0f;
-        const float yOffset = height / 2.0f;
-
-        g.setColour (juce::Colour (0xff333744));
-        g.drawRect (xOffset, yOffset - yPerAxis * 2, width - 2 * xOffset, yPerAxis * 2, 1.0f);
-        g.drawRect (xOffset, yOffset - yPerAxis, width - 2 * xOffset, yPerAxis, 1.0f);
-        g.drawRect (xOffset, yOffset, width - 2 * xOffset, yPerAxis, 1.0f);
-
-        g.setFont (juce::Font (8.0f));
-        g.setColour (juce::Colour (0xff555866));
-        g.drawText (juce::String (driftX * 100.0f) + "%  (timing)", xOffset, yOffset - yPerAxis * 1.7f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftY * 100.0f) + "%  (pitch)", xOffset, yOffset - yPerAxis * 0.5f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftZ * 100.0f) + "%  (velocity)", xOffset, yOffset + yPerAxis * 0.3f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-
+void LerpCurveEditor::mouseDrag (const juce::MouseEvent& e)
+{
+    if (activePoint < 0)
         return;
-    }
 
-    // Axis labels
-    g.setColour (juce::Colour (0xff555866));
-    g.setFont (juce::Font (9.0f));
-
-    // X axis (Chaos 0–1)
-    g.drawText ("0", padding + graphWidth * 0.2f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.drawText ("1", padding + graphWidth * 0.8f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Chaos", padding, padding + graphHeight * 0.95f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Y axis (Drift 0–1)
-    g.drawText ("0", padding, padding + graphHeight * 0.05f, juce::Justification::centred);
-    g.drawText ("1", padding, padding + graphHeight * 0.85f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Drift", padding, padding + graphHeight * 0.05f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Control points
-    for (int i = 0; i < (int) controlPoints.size(); ++i)
-    {
-        const float x = padding + controlPoints[i].x * graphWidth;
-        const float y = padding + graphHeight - controlPoints[i].y * graphHeight;
-
-        const float radius = 4.0f;
-        g.setColour (getCurveColour());
-        g.drawEllipse (x - radius, y - radius, radius * 2.0f, radius * 2.0f, 0.0f, juce::jmax (0.0f, 360.0f - i * 72.0f));
-
-        g.setColour (juce::Colour (0xff7dff5a));
-        g.setFont (juce::Font (8.0f));
-        const float labelX = x + 12.0f;
-        const float labelY = y - 12.0f;
-        g.drawEllipse (labelX - 3.0f, labelY - 3.0f, 6.0f, 6.0f, 0.0f, 60.0f);
-    }
-
-    // Curve
-    const float pointsT = 0.0f;
-    const float pointsX = controlPoints[0].x;
-    const float pointsY = controlPoints[0].y;
-    const float dx = pointsX - 0.0f;
-    const float dy = pointsY - 0.0f;
-    const float dist = std::sqrt (dx * dx + dy * dy);
-    const float angle = std::atan2 (dy, dx);
-    const float scale = std::min (1.0f, curveWidth / (dist + 0.0001f));
-    const float sx = pointsX + dx * scale;
-    const float sy = pointsY + dy * scale;
-
-    const float lerpX = multipliers.x;
-    const float lerpY = multipliers.y;
-    const float lerpZ = multipliers.z;
-
-    const float driftX = lerpX * (1.0f - sx);
-    const float driftY = lerpY * (1.0f - sy);
-    const float driftZ = lerpZ * (1.0f - sy);
-
-    const float curveX = chaosValue;
-    const auto curve = interpolate (controlPoints, chaosValue);
-    const float curveY = curve.y;
-    const float curveDx = chaosValue - curve.x;
-    const float curveDy = curveY - curve.y;
-    const float curveDist = std::sqrt (curveDx * curveDx + curveDy * curveDy);
-    const float curveAngle = std::atan2 (curveDy, curveDx);
-    const float curveScale = std::min (1.0f, curveWidth / (curveDist + 0.0001f));
-    const float curveSx = chaosValue + curveDx * curveScale;
-    const float curveSy = curveY + curveDy * curveScale;
-
-    const float curveDriftX = lerpX * (1.0f - curveSx);
-    const float curveDriftY = lerpY * (1.0f - curveSy);
-    const float curveDriftZ = lerpZ * (1.0f - curveSy);
-
-    const float previewX = lerpValue;
-    const auto previewCurve = interpolate (controlPoints, previewX);
-    const float previewY = previewCurve.y;
-    const float previewDx = previewX - previewCurve.x;
-    const float previewDy = previewY - previewCurve.y;
-    const float previewDist = std::sqrt (previewDx * previewDx + previewDy * previewDy);
-    const float previewAngle = std::atan2 (previewDy, previewDx);
-    const float previewScale = std::min (1.0f, curveWidth / (previewDist + 0.0001f));
-    const float previewSx = previewX + previewDx * previewScale;
-    const float previewSy = previewY + previewDy * previewScale;
-
-    const float previewDriftX = lerpX * (1.0f - previewSx);
-    const float previewDriftY = lerpY * (1.0f - previewSy);
-    const float previewDriftZ = lerpZ * (1.0f - previewSy);
-
-    if (viewMode == ViewMode::Preview)
-    {
-        const float yPerAxis = height / 3.0f;
-        const float xOffset = 10.0f;
-        const float yOffset = height / 2.0f;
-
-        g.setColour (juce::Colour (0xff333744));
-        g.drawRect (xOffset, yOffset - yPerAxis * 2, width - 2 * xOffset, yPerAxis * 2, 1.0f);
-        g.drawRect (xOffset, yOffset - yPerAxis, width - 2 * xOffset, yPerAxis, 1.0f);
-        g.drawRect (xOffset, yOffset, width - 2 * xOffset, yPerAxis, 1.0f);
-
-        g.setFont (juce::Font (8.0f));
-        g.setColour (juce::Colour (0xff555866));
-        g.drawText (juce::String (driftX * 100.0f) + "%  (timing)", xOffset, yOffset - yPerAxis * 1.7f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftY * 100.0f) + "%  (pitch)", xOffset, yOffset - yPerAxis * 0.5f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftZ * 100.0f) + "%  (velocity)", xOffset, yOffset + yPerAxis * 0.3f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-
-        return;
-    }
-
-    // Axis labels
-    g.setColour (juce::Colour (0xff555866));
-    g.setFont (juce::Font (9.0f));
-
-    // X axis (Chaos 0–1)
-    g.drawText ("0", padding + graphWidth * 0.2f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.drawText ("1", padding + graphWidth * 0.8f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Chaos", padding, padding + graphHeight * 0.95f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Y axis (Drift 0–1)
-    g.drawText ("0", padding, padding + graphHeight * 0.05f, juce::Justification::centred);
-    g.drawText ("1", padding, padding + graphHeight * 0.85f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Drift", padding, padding + graphHeight * 0.05f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Control points
-    for (int i = 0; i < (int) controlPoints.size(); ++i)
-    {
-        const float x = padding + controlPoints[i].x * graphWidth;
-        const float y = padding + graphHeight - controlPoints[i].y * graphHeight;
-
-        const float radius = 4.0f;
-        g.setColour (getCurveColour());
-        g.drawEllipse (x - radius, y - radius, radius * 2.0f, radius * 2.0f, 0.0f, juce::jmax (0.0f, 360.0f - i * 72.0f));
-
-        g.setColour (juce::Colour (0xff7dff5a));
-        g.setFont (juce::Font (8.0f));
-        const float labelX = x + 12.0f;
-        const float labelY = y - 12.0f;
-        g.drawEllipse (labelX - 3.0f, labelY - 3.0f, 6.0f, 6.0f, 0.0f, 60.0f);
-    }
-
-    // Curve
-    const float pointsT = 0.0f;
-    const float pointsX = controlPoints[0].x;
-    const float pointsY = controlPoints[0].y;
-    const float dx = pointsX - 0.0f;
-    const float dy = pointsY - 0.0f;
-    const float dist = std::sqrt (dx * dx + dy * dy);
-    const float angle = std::atan2 (dy, dx);
-    const float scale = std::min (1.0f, curveWidth / (dist + 0.0001f));
-    const float sx = pointsX + dx * scale;
-    const float sy = pointsY + dy * scale;
-
-    const float lerpX = multipliers.x;
-    const float lerpY = multipliers.y;
-    const float lerpZ = multipliers.z;
-
-    const float driftX = lerpX * (1.0f - sx);
-    const float driftY = lerpY * (1.0f - sy);
-    const float driftZ = lerpZ * (1.0f - sy);
-
-    const float curveX = chaosValue;
-    const auto curve = interpolate (controlPoints, chaosValue);
-    const float curveY = curve.y;
-    const float curveDx = chaosValue - curve.x;
-    const float curveDy = curveY - curve.y;
-    const float curveDist = std::sqrt (curveDx * curveDx + curveDy * curveDy);
-    const float curveAngle = std::atan2 (curveDy, curveDx);
-    const float curveScale = std::min (1.0f, curveWidth / (curveDist + 0.0001f));
-    const float curveSx = chaosValue + curveDx * curveScale;
-    const float curveSy = curveY + curveDy * curveScale;
-
-    const float curveDriftX = lerpX * (1.0f - curveSx);
-    const float curveDriftY = lerpY * (1.0f - curveSy);
-    const float curveDriftZ = lerpZ * (1.0f - curveSy);
-
-    const float previewX = lerpValue;
-    const auto previewCurve = interpolate (controlPoints, previewX);
-    const float previewY = previewCurve.y;
-    const float previewDx = previewX - previewCurve.x;
-    const float previewDy = previewY - previewCurve.y;
-    const float previewDist = std::sqrt (previewDx * previewDx + previewDy * previewDy);
-    const float previewAngle = std::atan2 (previewDy, previewDx);
-    const float previewScale = std::min (1.0f, curveWidth / (previewDist + 0.0001f));
-    const float previewSx = previewX + previewDx * previewScale;
-    const float previewSy = previewY + previewDy * previewScale;
-
-    const float previewDriftX = lerpX * (1.0f - previewSx);
-    const float previewDriftY = lerpY * (1.0f - previewSy);
-    const float previewDriftZ = lerpZ * (1.0f - previewSy);
-
-    if (viewMode == ViewMode::Preview)
-    {
-        const float yPerAxis = height / 3.0f;
-        const float xOffset = 10.0f;
-        const float yOffset = height / 2.0f;
-
-        g.setColour (juce::Colour (0xff333744));
-        g.drawRect (xOffset, yOffset - yPerAxis * 2, width - 2 * xOffset, yPerAxis * 2, 1.0f);
-        g.drawRect (xOffset, yOffset - yPerAxis, width - 2 * xOffset, yPerAxis, 1.0f);
-        g.drawRect (xOffset, yOffset, width - 2 * xOffset, yPerAxis, 1.0f);
-
-        g.setFont (juce::Font (8.0f));
-        g.setColour (juce::Colour (0xff555866));
-        g.drawText (juce::String (driftX * 100.0f) + "%  (timing)", xOffset, yOffset - yPerAxis * 1.7f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftY * 100.0f) + "%  (pitch)", xOffset, yOffset - yPerAxis * 0.5f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftZ * 100.0f) + "%  (velocity)", xOffset, yOffset + yPerAxis * 0.3f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-
-        return;
-    }
-
-    // Axis labels
-    g.setColour (juce::Colour (0xff555866));
-    g.setFont (juce::Font (9.0f));
-
-    // X axis (Chaos 0–1)
-    g.drawText ("0", padding + graphWidth * 0.2f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.drawText ("1", padding + graphWidth * 0.8f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Chaos", padding, padding + graphHeight * 0.95f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Y axis (Drift 0–1)
-    g.drawText ("0", padding, padding + graphHeight * 0.05f, juce::Justification::centred);
-    g.drawText ("1", padding, padding + graphHeight * 0.85f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Drift", padding, padding + graphHeight * 0.05f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Control points
-    for (int i = 0; i < (int) controlPoints.size(); ++i)
-    {
-        const float x = padding + controlPoints[i].x * graphWidth;
-        const float y = padding + graphHeight - controlPoints[i].y * graphHeight;
-
-        const float radius = 4.0f;
-        g.setColour (getCurveColour());
-        g.drawEllipse (x - radius, y - radius, radius * 2.0f, radius * 2.0f, 0.0f, juce::jmax (0.0f, 360.0f - i * 72.0f));
-
-        g.setColour (juce::Colour (0xff7dff5a));
-        g.setFont (juce::Font (8.0f));
-        const float labelX = x + 12.0f;
-        const float labelY = y - 12.0f;
-        g.drawEllipse (labelX - 3.0f, labelY - 3.0f, 6.0f, 6.0f, 0.0f, 60.0f);
-    }
-
-    // Curve
-    const float pointsT = 0.0f;
-    const float pointsX = controlPoints[0].x;
-    const float pointsY = controlPoints[0].y;
-    const float dx = pointsX - 0.0f;
-    const float dy = pointsY - 0.0f;
-    const float dist = std::sqrt (dx * dx + dy * dy);
-    const float angle = std::atan2 (dy, dx);
-    const float scale = std::min (1.0f, curveWidth / (dist + 0.0001f));
-    const float sx = pointsX + dx * scale;
-    const float sy = pointsY + dy * scale;
-
-    const float lerpX = multipliers.x;
-    const float lerpY = multipliers.y;
-    const float lerpZ = multipliers.z;
-
-    const float driftX = lerpX * (1.0f - sx);
-    const float driftY = lerpY * (1.0f - sy);
-    const float driftZ = lerpZ * (1.0f - sy);
-
-    const float curveX = chaosValue;
-    const auto curve = interpolate (controlPoints, chaosValue);
-    const float curveY = curve.y;
-    const float curveDx = chaosValue - curve.x;
-    const float curveDy = curveY - curve.y;
-    const float curveDist = std::sqrt (curveDx * curveDx + curveDy * curveDy);
-    const float curveAngle = std::atan2 (curveDy, curveDx);
-    const float curveScale = std::min (1.0f, curveWidth / (curveDist + 0.0001f));
-    const float curveSx = chaosValue + curveDx * curveScale;
-    const float curveSy = curveY + curveDy * curveScale;
-
-    const float curveDriftX = lerpX * (1.0f - curveSx);
-    const float curveDriftY = lerpY * (1.0f - curveSy);
-    const float curveDriftZ = lerpZ * (1.0f - curveSy);
-
-    const float previewX = lerpValue;
-    const auto previewCurve = interpolate (controlPoints, previewX);
-    const float previewY = previewCurve.y;
-    const float previewDx = previewX - previewCurve.x;
-    const float previewDy = previewY - previewCurve.y;
-    const float previewDist = std::sqrt (previewDx * previewDx + previewDy * previewDy);
-    const float previewAngle = std::atan2 (previewDy, previewDx);
-    const float previewScale = std::min (1.0f, curveWidth / (previewDist + 0.0001f));
-    const float previewSx = previewX + previewDx * previewScale;
-    const float previewSy = previewY + previewDy * previewScale;
-
-    const float previewDriftX = lerpX * (1.0f - previewSx);
-    const float previewDriftY = lerpY * (1.0f - previewSy);
-    const float previewDriftZ = lerpZ * (1.0f - previewSy);
-
-    if (viewMode == ViewMode::Preview)
-    {
-        const float yPerAxis = height / 3.0f;
-        const float xOffset = 10.0f;
-        const float yOffset = height / 2.0f;
-
-        g.setColour (juce::Colour (0xff333744));
-        g.drawRect (xOffset, yOffset - yPerAxis * 2, width - 2 * xOffset, yPerAxis * 2, 1.0f);
-        g.drawRect (xOffset, yOffset - yPerAxis, width - 2 * xOffset, yPerAxis, 1.0f);
-        g.drawRect (xOffset, yOffset, width - 2 * xOffset, yPerAxis, 1.0f);
-
-        g.setFont (juce::Font (8.0f));
-        g.setColour (juce::Colour (0xff555866));
-        g.drawText (juce::String (driftX * 100.0f) + "%  (timing)", xOffset, yOffset - yPerAxis * 1.7f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftY * 100.0f) + "%  (pitch)", xOffset, yOffset - yPerAxis * 0.5f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftZ * 100.0f) + "%  (velocity)", xOffset, yOffset + yPerAxis * 0.3f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-
-        return;
-    }
-
-    // Axis labels
-    g.setColour (juce::Colour (0xff555866));
-    g.setFont (juce::Font (9.0f));
-
-    // X axis (Chaos 0–1)
-    g.drawText ("0", padding + graphWidth * 0.2f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.drawText ("1", padding + graphWidth * 0.8f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Chaos", padding, padding + graphHeight * 0.95f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Y axis (Drift 0–1)
-    g.drawText ("0", padding, padding + graphHeight * 0.05f, juce::Justification::centred);
-    g.drawText ("1", padding, padding + graphHeight * 0.85f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Drift", padding, padding + graphHeight * 0.05f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Control points
-    for (int i = 0; i < (int) controlPoints.size(); ++i)
-    {
-        const float x = padding + controlPoints[i].x * graphWidth;
-        const float y = padding + graphHeight - controlPoints[i].y * graphHeight;
-
-        const float radius = 4.0f;
-        g.setColour (getCurveColour());
-        g.drawEllipse (x - radius, y - radius, radius * 2.0f, radius * 2.0f, 0.0f, juce::jmax (0.0f, 360.0f - i * 72.0f));
-
-        g.setColour (juce::Colour (0xff7dff5a));
-        g.setFont (juce::Font (8.0f));
-        const float labelX = x + 12.0f;
-        const float labelY = y - 12.0f;
-        g.drawEllipse (labelX - 3.0f, labelY - 3.0f, 6.0f, 6.0f, 0.0f, 60.0f);
-    }
-
-    // Curve
-    const float pointsT = 0.0f;
-    const float pointsX = controlPoints[0].x;
-    const float pointsY = controlPoints[0].y;
-    const float dx = pointsX - 0.0f;
-    const float dy = pointsY - 0.0f;
-    const float dist = std::sqrt (dx * dx + dy * dy);
-    const float angle = std::atan2 (dy, dx);
-    const float scale = std::min (1.0f, curveWidth / (dist + 0.0001f));
-    const float sx = pointsX + dx * scale;
-    const float sy = pointsY + dy * scale;
-
-    const float lerpX = multipliers.x;
-    const float lerpY = multipliers.y;
-    const float lerpZ = multipliers.z;
-
-    const float driftX = lerpX * (1.0f - sx);
-    const float driftY = lerpY * (1.0f - sy);
-    const float driftZ = lerpZ * (1.0f - sy);
-
-    const float curveX = chaosValue;
-    const auto curve = interpolate (controlPoints, chaosValue);
-    const float curveY = curve.y;
-    const float curveDx = chaosValue - curve.x;
-    const float curveDy = curveY - curve.y;
-    const float curveDist = std::sqrt (curveDx * curveDx + curveDy * curveDy);
-    const float curveAngle = std::atan2 (curveDy, curveDx);
-    const float curveScale = std::min (1.0f, curveWidth / (curveDist + 0.0001f));
-    const float curveSx = chaosValue + curveDx * curveScale;
-    const float curveSy = curveY + curveDy * curveScale;
-
-    const float curveDriftX = lerpX * (1.0f - curveSx);
-    const float curveDriftY = lerpY * (1.0f - curveSy);
-    const float curveDriftZ = lerpZ * (1.0f - curveSy);
-
-    const float previewX = lerpValue;
-    const auto previewCurve = interpolate (controlPoints, previewX);
-    const float previewY = previewCurve.y;
-    const float previewDx = previewX - previewCurve.x;
-    const float previewDy = previewY - previewCurve.y;
-    const float previewDist = std::sqrt (previewDx * previewDx + previewDy * previewDy);
-    const float previewAngle = std::atan2 (previewDy, previewDx);
-    const float previewScale = std::min (1.0f, curveWidth / (previewDist + 0.0001f));
-    const float previewSx = previewX + previewDx * previewScale;
-    const float previewSy = previewY + previewDy * previewScale;
-
-    const float previewDriftX = lerpX * (1.0f - previewSx);
-    const float previewDriftY = lerpY * (1.0f - previewSy);
-    const float previewDriftZ = lerpZ * (1.0f - previewSy);
-
-    if (viewMode == ViewMode::Preview)
-    {
-        const float yPerAxis = height / 3.0f;
-        const float xOffset = 10.0f;
-        const float yOffset = height / 2.0f;
-
-        g.setColour (juce::Colour (0xff333744));
-        g.drawRect (xOffset, yOffset - yPerAxis * 2, width - 2 * xOffset, yPerAxis * 2, 1.0f);
-        g.drawRect (xOffset, yOffset - yPerAxis, width - 2 * xOffset, yPerAxis, 1.0f);
-        g.drawRect (xOffset, yOffset, width - 2 * xOffset, yPerAxis, 1.0f);
-
-        g.setFont (juce::Font (8.0f));
-        g.setColour (juce::Colour (0xff555866));
-        g.drawText (juce::String (driftX * 100.0f) + "%  (timing)", xOffset, yOffset - yPerAxis * 1.7f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftY * 100.0f) + "%  (pitch)", xOffset, yOffset - yPerAxis * 0.5f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftZ * 100.0f) + "%  (velocity)", xOffset, yOffset + yPerAxis * 0.3f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-
-        return;
-    }
-
-    // Axis labels
-    g.setColour (juce::Colour (0xff555866));
-    g.setFont (juce::Font (9.0f));
-
-    // X axis (Chaos 0–1)
-    g.drawText ("0", padding + graphWidth * 0.2f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.drawText ("1", padding + graphWidth * 0.8f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Chaos", padding, padding + graphHeight * 0.95f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Y axis (Drift 0–1)
-    g.drawText ("0", padding, padding + graphHeight * 0.05f, juce::Justification::centred);
-    g.drawText ("1", padding, padding + graphHeight * 0.85f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Drift", padding, padding + graphHeight * 0.05f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Control points
-    for (int i = 0; i < (int) controlPoints.size(); ++i)
-    {
-        const float x = padding + controlPoints[i].x * graphWidth;
-        const float y = padding + graphHeight - controlPoints[i].y * graphHeight;
-
-        const float radius = 4.0f;
-        g.setColour (getCurveColour());
-        g.drawEllipse (x - radius, y - radius, radius * 2.0f, radius * 2.0f, 0.0f, juce::jmax (0.0f, 360.0f - i * 72.0f));
-
-        g.setColour (juce::Colour (0xff7dff5a));
-        g.setFont (juce::Font (8.0f));
-        const float labelX = x + 12.0f;
-        const float labelY = y - 12.0f;
-        g.drawEllipse (labelX - 3.0f, labelY - 3.0f, 6.0f, 6.0f, 0.0f, 60.0f);
-    }
-
-    // Curve
-    const float pointsT = 0.0f;
-    const float pointsX = controlPoints[0].x;
-    const float pointsY = controlPoints[0].y;
-    const float dx = pointsX - 0.0f;
-    const float dy = pointsY - 0.0f;
-    const float dist = std::sqrt (dx * dx + dy * dy);
-    const float angle = std::atan2 (dy, dx);
-    const float scale = std::min (1.0f, curveWidth / (dist + 0.0001f));
-    const float sx = pointsX + dx * scale;
-    const float sy = pointsY + dy * scale;
-
-    const float lerpX = multipliers.x;
-    const float lerpY = multipliers.y;
-    const float lerpZ = multipliers.z;
-
-    const float driftX = lerpX * (1.0f - sx);
-    const float driftY = lerpY * (1.0f - sy);
-    const float driftZ = lerpZ * (1.0f - sy);
-
-    const float curveX = chaosValue;
-    const auto curve = interpolate (controlPoints, chaosValue);
-    const float curveY = curve.y;
-    const float curveDx = chaosValue - curve.x;
-    const float curveDy = curveY - curve.y;
-    const float curveDist = std::sqrt (curveDx * curveDx + curveDy * curveDy);
-    const float curveAngle = std::atan2 (curveDy, curveDx);
-    const float curveScale = std::min (1.0f, curveWidth / (curveDist + 0.0001f));
-    const float curveSx = chaosValue + curveDx * curveScale;
-    const float curveSy = curveY + curveDy * curveScale;
-
-    const float curveDriftX = lerpX * (1.0f - curveSx);
-    const float curveDriftY = lerpY * (1.0f - curveSy);
-    const float curveDriftZ = lerpZ * (1.0f - curveSy);
-
-    const float previewX = lerpValue;
-    const auto previewCurve = interpolate (controlPoints, previewX);
-    const float previewY = previewCurve.y;
-    const float previewDx = previewX - previewCurve.x;
-    const float previewDy = previewY - previewCurve.y;
-    const float previewDist = std::sqrt (previewDx * previewDx + previewDy * previewDy);
-    const float previewAngle = std::atan2 (previewDy, previewDx);
-    const float previewScale = std::min (1.0f, curveWidth / (previewDist + 0.0001f));
-    const float previewSx = previewX + previewDx * previewScale;
-    const float previewSy = previewY + previewDy * previewScale;
-
-    const float previewDriftX = lerpX * (1.0f - previewSx);
-    const float previewDriftY = lerpY * (1.0f - previewSy);
-    const float previewDriftZ = lerpZ * (1.0f - previewSy);
-
-    if (viewMode == ViewMode::Preview)
-    {
-        const float yPerAxis = height / 3.0f;
-        const float xOffset = 10.0f;
-        const float yOffset = height / 2.0f;
-
-        g.setColour (juce::Colour (0xff333744));
-        g.drawRect (xOffset, yOffset - yPerAxis * 2, width - 2 * xOffset, yPerAxis * 2, 1.0f);
-        g.drawRect (xOffset, yOffset - yPerAxis, width - 2 * xOffset, yPerAxis, 1.0f);
-        g.drawRect (xOffset, yOffset, width - 2 * xOffset, yPerAxis, 1.0f);
-
-        g.setFont (juce::Font (8.0f));
-        g.setColour (juce::Colour (0xff555866));
-        g.drawText (juce::String (driftX * 100.0f) + "%  (timing)", xOffset, yOffset - yPerAxis * 1.7f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftY * 100.0f) + "%  (pitch)", xOffset, yOffset - yPerAxis * 0.5f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftZ * 100.0f) + "%  (velocity)", xOffset, yOffset + yPerAxis * 0.3f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-
-        return;
-    }
-
-    // Axis labels
-    g.setColour (juce::Colour (0xff555866));
-    g.setFont (juce::Font (9.0f));
-
-    // X axis (Chaos 0–1)
-    g.drawText ("0", padding + graphWidth * 0.2f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.drawText ("1", padding + graphWidth * 0.8f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Chaos", padding, padding + graphHeight * 0.95f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Y axis (Drift 0–1)
-    g.drawText ("0", padding, padding + graphHeight * 0.05f, juce::Justification::centred);
-    g.drawText ("1", padding, padding + graphHeight * 0.85f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Drift", padding, padding + graphHeight * 0.05f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Control points
-    for (int i = 0; i < (int) controlPoints.size(); ++i)
-    {
-        const float x = padding + controlPoints[i].x * graphWidth;
-        const float y = padding + graphHeight - controlPoints[i].y * graphHeight;
-
-        const float radius = 4.0f;
-        g.setColour (getCurveColour());
-        g.drawEllipse (x - radius, y - radius, radius * 2.0f, radius * 2.0f, 0.0f, juce::jmax (0.0f, 360.0f - i * 72.0f));
-
-        g.setColour (juce::Colour (0xff7dff5a));
-        g.setFont (juce::Font (8.0f));
-        const float labelX = x + 12.0f;
-        const float labelY = y - 12.0f;
-        g.drawEllipse (labelX - 3.0f, labelY - 3.0f, 6.0f, 6.0f, 0.0f, 60.0f);
-    }
-
-    // Curve
-    const float pointsT = 0.0f;
-    const float pointsX = controlPoints[0].x;
-    const float pointsY = controlPoints[0].y;
-    const float dx = pointsX - 0.0f;
-    const float dy = pointsY - 0.0f;
-    const float dist = std::sqrt (dx * dx + dy * dy);
-    const float angle = std::atan2 (dy, dx);
-    const float scale = std::min (1.0f, curveWidth / (dist + 0.0001f));
-    const float sx = pointsX + dx * scale;
-    const float sy = pointsY + dy * scale;
-
-    const float lerpX = multipliers.x;
-    const float lerpY = multipliers.y;
-    const float lerpZ = multipliers.z;
-
-    const float driftX = lerpX * (1.0f - sx);
-    const float driftY = lerpY * (1.0f - sy);
-    const float driftZ = lerpZ * (1.0f - sy);
-
-    const float curveX = chaosValue;
-    const auto curve = interpolate (controlPoints, chaosValue);
-    const float curveY = curve.y;
-    const float curveDx = chaosValue - curve.x;
-    const float curveDy = curveY - curve.y;
-    const float curveDist = std::sqrt (curveDx * curveDx + curveDy * curveDy);
-    const float curveAngle = std::atan2 (curveDy, curveDx);
-    const float curveScale = std::min (1.0f, curveWidth / (curveDist + 0.0001f));
-    const float curveSx = chaosValue + curveDx * curveScale;
-    const float curveSy = curveY + curveDy * curveScale;
-
-    const float curveDriftX = lerpX * (1.0f - curveSx);
-    const float curveDriftY = lerpY * (1.0f - curveSy);
-    const float curveDriftZ = lerpZ * (1.0f - curveSy);
-
-    const float previewX = lerpValue;
-    const auto previewCurve = interpolate (controlPoints, previewX);
-    const float previewY = previewCurve.y;
-    const float previewDx = previewX - previewCurve.x;
-    const float previewDy = previewY - previewCurve.y;
-    const float previewDist = std::sqrt (previewDx * previewDx + previewDy * previewDy);
-    const float previewAngle = std::atan2 (previewDy, previewDx);
-    const float previewScale = std::min (1.0f, curveWidth / (previewDist + 0.0001f));
-    const float previewSx = previewX + previewDx * previewScale;
-    const float previewSy = previewY + previewDy * previewScale;
-
-    const float previewDriftX = lerpX * (1.0f - previewSx);
-    const float previewDriftY = lerpY * (1.0f - previewSy);
-    const float previewDriftZ = lerpZ * (1.0f - previewSy);
-
-    if (viewMode == ViewMode::Preview)
-    {
-        const float yPerAxis = height / 3.0f;
-        const float xOffset = 10.0f;
-        const float yOffset = height / 2.0f;
-
-        g.setColour (juce::Colour (0xff333744));
-        g.drawRect (xOffset, yOffset - yPerAxis * 2, width - 2 * xOffset, yPerAxis * 2, 1.0f);
-        g.drawRect (xOffset, yOffset - yPerAxis, width - 2 * xOffset, yPerAxis, 1.0f);
-        g.drawRect (xOffset, yOffset, width - 2 * xOffset, yPerAxis, 1.0f);
-
-        g.setFont (juce::Font (8.0f));
-        g.setColour (juce::Colour (0xff555866));
-        g.drawText (juce::String (driftX * 100.0f) + "%  (timing)", xOffset, yOffset - yPerAxis * 1.7f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftY * 100.0f) + "%  (pitch)", xOffset, yOffset - yPerAxis * 0.5f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftZ * 100.0f) + "%  (velocity)", xOffset, yOffset + yPerAxis * 0.3f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-
-        return;
-    }
-
-    // Axis labels
-    g.setColour (juce::Colour (0xff555866));
-    g.setFont (juce::Font (9.0f));
-
-    // X axis (Chaos 0–1)
-    g.drawText ("0", padding + graphWidth * 0.2f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.drawText ("1", padding + graphWidth * 0.8f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Chaos", padding, padding + graphHeight * 0.95f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Y axis (Drift 0–1)
-    g.drawText ("0", padding, padding + graphHeight * 0.05f, juce::Justification::centred);
-    g.drawText ("1", padding, padding + graphHeight * 0.85f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Drift", padding, padding + graphHeight * 0.05f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Control points
-    for (int i = 0; i < (int) controlPoints.size(); ++i)
-    {
-        const float x = padding + controlPoints[i].x * graphWidth;
-        const float y = padding + graphHeight - controlPoints[i].y * graphHeight;
-
-        const float radius = 4.0f;
-        g.setColour (getCurveColour());
-        g.drawEllipse (x - radius, y - radius, radius * 2.0f, radius * 2.0f, 0.0f, juce::jmax (0.0f, 360.0f - i * 72.0f));
-
-        g.setColour (juce::Colour (0xff7dff5a));
-        g.setFont (juce::Font (8.0f));
-        const float labelX = x + 12.0f;
-        const float labelY = y - 12.0f;
-        g.drawEllipse (labelX - 3.0f, labelY - 3.0f, 6.0f, 6.0f, 0.0f, 60.0f);
-    }
-
-    // Curve
-    const float pointsT = 0.0f;
-    const float pointsX = controlPoints[0].x;
-    const float pointsY = controlPoints[0].y;
-    const float dx = pointsX - 0.0f;
-    const float dy = pointsY - 0.0f;
-    const float dist = std::sqrt (dx * dx + dy * dy);
-    const float angle = std::atan2 (dy, dx);
-    const float scale = std::min (1.0f, curveWidth / (dist + 0.0001f));
-    const float sx = pointsX + dx * scale;
-    const float sy = pointsY + dy * scale;
-
-    const float lerpX = multipliers.x;
-    const float lerpY = multipliers.y;
-    const float lerpZ = multipliers.z;
-
-    const float driftX = lerpX * (1.0f - sx);
-    const float driftY = lerpY * (1.0f - sy);
-    const float driftZ = lerpZ * (1.0f - sy);
-
-    const float curveX = chaosValue;
-    const auto curve = interpolate (controlPoints, chaosValue);
-    const float curveY = curve.y;
-    const float curveDx = chaosValue - curve.x;
-    const float curveDy = curveY - curve.y;
-    const float curveDist = std::sqrt (curveDx * curveDx + curveDy * curveDy);
-    const float curveAngle = std::atan2 (curveDy, curveDx);
-    const float curveScale = std::min (1.0f, curveWidth / (curveDist + 0.0001f));
-    const float curveSx = chaosValue + curveDx * curveScale;
-    const float curveSy = curveY + curveDy * curveScale;
-
-    const float curveDriftX = lerpX * (1.0f - curveSx);
-    const float curveDriftY = lerpY * (1.0f - curveSy);
-    const float curveDriftZ = lerpZ * (1.0f - curveSy);
-
-    const float previewX = lerpValue;
-    const auto previewCurve = interpolate (controlPoints, previewX);
-    const float previewY = previewCurve.y;
-    const float previewDx = previewX - previewCurve.x;
-    const float previewDy = previewY - previewCurve.y;
-    const float previewDist = std::sqrt (previewDx * previewDx + previewDy * previewDy);
-    const float previewAngle = std::atan2 (previewDy, previewDx);
-    const float previewScale = std::min (1.0f, curveWidth / (previewDist + 0.0001f));
-    const float previewSx = previewX + previewDx * previewScale;
-    const float previewSy = previewY + previewDy * previewScale;
-
-    const float previewDriftX = lerpX * (1.0f - previewSx);
-    const float previewDriftY = lerpY * (1.0f - previewSy);
-    const float previewDriftZ = lerpZ * (1.0f - previewSy);
-
-    if (viewMode == ViewMode::Preview)
-    {
-        const float yPerAxis = height / 3.0f;
-        const float xOffset = 10.0f;
-        const float yOffset = height / 2.0f;
-
-        g.setColour (juce::Colour (0xff333744));
-        g.drawRect (xOffset, yOffset - yPerAxis * 2, width - 2 * xOffset, yPerAxis * 2, 1.0f);
-        g.drawRect (xOffset, yOffset - yPerAxis, width - 2 * xOffset, yPerAxis, 1.0f);
-        g.drawRect (xOffset, yOffset, width - 2 * xOffset, yPerAxis, 1.0f);
-
-        g.setFont (juce::Font (8.0f));
-        g.setColour (juce::Colour (0xff555866));
-        g.drawText (juce::String (driftX * 100.0f) + "%  (timing)", xOffset, yOffset - yPerAxis * 1.7f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftY * 100.0f) + "%  (pitch)", xOffset, yOffset - yPerAxis * 0.5f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftZ * 100.0f) + "%  (velocity)", xOffset, yOffset + yPerAxis * 0.3f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-
-        return;
-    }
-
-    // Axis labels
-    g.setColour (juce::Colour (0xff555866));
-    g.setFont (juce::Font (9.0f));
-
-    // X axis (Chaos 0–1)
-    g.drawText ("0", padding + graphWidth * 0.2f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.drawText ("1", padding + graphWidth * 0.8f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Chaos", padding, padding + graphHeight * 0.95f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Y axis (Drift 0–1)
-    g.drawText ("0", padding, padding + graphHeight * 0.05f, juce::Justification::centred);
-    g.drawText ("1", padding, padding + graphHeight * 0.85f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Drift", padding, padding + graphHeight * 0.05f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Control points
-    for (int i = 0; i < (int) controlPoints.size(); ++i)
-    {
-        const float x = padding + controlPoints[i].x * graphWidth;
-        const float y = padding + graphHeight - controlPoints[i].y * graphHeight;
-
-        const float radius = 4.0f;
-        g.setColour (getCurveColour());
-        g.drawEllipse (x - radius, y - radius, radius * 2.0f, radius * 2.0f, 0.0f, juce::jmax (0.0f, 360.0f - i * 72.0f));
-
-        g.setColour (juce::Colour (0xff7dff5a));
-        g.setFont (juce::Font (8.0f));
-        const float labelX = x + 12.0f;
-        const float labelY = y - 12.0f;
-        g.drawEllipse (labelX - 3.0f, labelY - 3.0f, 6.0f, 6.0f, 0.0f, 60.0f);
-    }
-
-    // Curve
-    const float pointsT = 0.0f;
-    const float pointsX = controlPoints[0].x;
-    const float pointsY = controlPoints[0].y;
-    const float dx = pointsX - 0.0f;
-    const float dy = pointsY - 0.0f;
-    const float dist = std::sqrt (dx * dx + dy * dy);
-    const float angle = std::atan2 (dy, dx);
-    const float scale = std::min (1.0f, curveWidth / (dist + 0.0001f));
-    const float sx = pointsX + dx * scale;
-    const float sy = pointsY + dy * scale;
-
-    const float lerpX = multipliers.x;
-    const float lerpY = multipliers.y;
-    const float lerpZ = multipliers.z;
-
-    const float driftX = lerpX * (1.0f - sx);
-    const float driftY = lerpY * (1.0f - sy);
-    const float driftZ = lerpZ * (1.0f - sy);
-
-    const float curveX = chaosValue;
-    const auto curve = interpolate (controlPoints, chaosValue);
-    const float curveY = curve.y;
-    const float curveDx = chaosValue - curve.x;
-    const float curveDy = curveY - curve.y;
-    const float curveDist = std::sqrt (curveDx * curveDx + curveDy * curveDy);
-    const float curveAngle = std::atan2 (curveDy, curveDx);
-    const float curveScale = std::min (1.0f, curveWidth / (curveDist + 0.0001f));
-    const float curveSx = chaosValue + curveDx * curveScale;
-    const float curveSy = curveY + curveDy * curveScale;
-
-    const float curveDriftX = lerpX * (1.0f - curveSx);
-    const float curveDriftY = lerpY * (1.0f - curveSy);
-    const float curveDriftZ = lerpZ * (1.0f - curveSy);
-
-    const float previewX = lerpValue;
-    const auto previewCurve = interpolate (controlPoints, previewX);
-    const float previewY = previewCurve.y;
-    const float previewDx = previewX - previewCurve.x;
-    const float previewDy = previewY - previewCurve.y;
-    const float previewDist = std::sqrt (previewDx * previewDx + previewDy * previewDy);
-    const float previewAngle = std::atan2 (previewDy, previewDx);
-    const float previewScale = std::min (1.0f, curveWidth / (previewDist + 0.0001f));
-    const float previewSx = previewX + previewDx * previewScale;
-    const float previewSy = previewY + previewDy * previewScale;
-
-    const float previewDriftX = lerpX * (1.0f - previewSx);
-    const float previewDriftY = lerpY * (1.0f - previewSy);
-    const float previewDriftZ = lerpZ * (1.0f - previewSy);
-
-    if (viewMode == ViewMode::Preview)
-    {
-        const float yPerAxis = height / 3.0f;
-        const float xOffset = 10.0f;
-        const float yOffset = height / 2.0f;
-
-        g.setColour (juce::Colour (0xff333744));
-        g.drawRect (xOffset, yOffset - yPerAxis * 2, width - 2 * xOffset, yPerAxis * 2, 1.0f);
-        g.drawRect (xOffset, yOffset - yPerAxis, width - 2 * xOffset, yPerAxis, 1.0f);
-        g.drawRect (xOffset, yOffset, width - 2 * xOffset, yPerAxis, 1.0f);
-
-        g.setFont (juce::Font (8.0f));
-        g.setColour (juce::Colour (0xff555866));
-        g.drawText (juce::String (driftX * 100.0f) + "%  (timing)", xOffset, yOffset - yPerAxis * 1.7f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftY * 100.0f) + "%  (pitch)", xOffset, yOffset - yPerAxis * 0.5f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-        g.drawText (juce::String (driftZ * 100.0f) + "%  (velocity)", xOffset, yOffset + yPerAxis * 0.3f, width - 2 * xOffset, 12.0f, juce::Justification::centred);
-
-        return;
-    }
-
-    // Axis labels
-    g.setColour (juce::Colour (0xff555866));
-    g.setFont (juce::Font (9.0f));
-
-    // X axis (Chaos 0–1)
-    g.drawText ("0", padding + graphWidth * 0.2f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.drawText ("1", padding + graphWidth * 0.8f, padding + graphHeight * 0.95f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Chaos", padding, padding + graphHeight * 0.95f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Y axis (Drift 0–1)
-    g.drawText ("0", padding, padding + graphHeight * 0.05f, juce::Justification::centred);
-    g.drawText ("1", padding, padding + graphHeight * 0.85f, juce::Justification::centred);
-    g.setFont (juce::Font (7.0f));
-    g.drawText ("Drift", padding, padding + graphHeight * 0.05f, graphWidth * 0.6f, 14.0f, juce::Justification::centred);
-
-    // Control points
-    for (int i = 0; i < (int) controlPoints.size(); ++i)
-    {
-        const float x = padding + controlPoints[i].x * graphWidth;
-        const float y = padding + graphHeight - controlPoints[i].y * graphHeight;
-
-        const float radius = 4.0f;
-        g.setColour (getCurveColour());
-        g.drawEllipse (x - radius, y - radius, radius * 2.0f, radius * 2.0f, 0.0f, juce::jmax (0.0f, 360.0f - i * 72.0f));
-
-        g.setColour (juce::Colour (0xff7dff5a));
-        g.setFont (juce::Font (8.0f));
-        const float labelX = x + 12.0f;
-        const float labelY = y - 12.0f;
-        g.drawEllipse (labelX - 3.0f, labelY - 3.0f, 6.0f, 6.0f, 0.0f, 60.0f);
-    }
+    processor.setLerpCurvePoint (activePoint, fromPlot (e.position));
+    repaint();
+}
+
+void LerpCurveEditor::mouseUp (const juce::MouseEvent&)
+{
+    activePoint = -1;
+    repaint();
+}
+
+void LerpCurveEditor::mouseDoubleClick (const juce::MouseEvent&)
+{
+    processor.resetLerpCurve();
+    activePoint = -1;
+    repaint();
 }

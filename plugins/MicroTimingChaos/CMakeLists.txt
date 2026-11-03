@@ -12,25 +12,44 @@ juce_add_plugin(MicroTimingChaos
     NEEDS_MIDI_OUTPUT TRUE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     COPY_PLUGIN_AFTER_BUILD FALSE
-    PLUGIN_RESOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Resources"
-    PLUGIN_RESOURCE_FILES
-        "Resources/icons/*.svg"
-        "Resources/textures/*.png"
 )
 
-target_sources(MicroTimingChaos PRIVATE
+set(MICRO_TIMING_CHAOS_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+
+set(MICRO_TIMING_CHAOS_SOURCES
     Source/PluginProcessor.cpp
     Source/PluginProcessor.h
     Source/PluginEditor.cpp
     Source/PluginEditor.h
     Source/LerpCurveEditor.cpp
+    Source/LerpCurveEditor.h
+    Source/LerpPreview.cpp
+    Source/LerpPreview.h
     Source/MicroTimingChaosLookAndFeel.cpp
+)
+
+# Icons and textures are embedded in the binary, so they load from inside the plugin bundle.
+juce_add_binary_data(MicroTimingChaosAssets
+    SOURCES
+        Resources/icons/bpm_sync_active.svg
+        Resources/icons/bpm_sync_inactive.svg
+        Resources/textures/bpm_sync_4k.png
+        Resources/textures/sequencer_bg_4k.png
+        Resources/textures/sequencer_grid_4k.png
+)
+
+target_sources(MicroTimingChaos PRIVATE ${MICRO_TIMING_CHAOS_SOURCES})
+
+target_include_directories(MicroTimingChaos PRIVATE
+    ${MICRO_TIMING_CHAOS_INCLUDE_DIR}
+    ${MICRO_TIMING_CHAOS_INCLUDE_DIR}/Source
 )
 
 suite_ui_add_to_target(MicroTimingChaos)
 
 target_link_libraries(MicroTimingChaos PRIVATE
     CoreDSP
+    MicroTimingChaosAssets
     juce::juce_audio_utils
     juce::juce_audio_processors
     juce::juce_gui_basics
@@ -42,12 +61,12 @@ target_link_libraries(MicroTimingChaos PRIVATE
 if(SUITE_BUILD_TESTS)
     add_executable(MicroTimingChaosTests
         tests/PluginTests.cpp
-        Source/PluginProcessor.cpp
-        Source/PluginEditor.cpp
+        ${MICRO_TIMING_CHAOS_SOURCES}
     )
 
     target_include_directories(MicroTimingChaosTests PRIVATE
-        Source
+        ${MICRO_TIMING_CHAOS_INCLUDE_DIR}
+        ${MICRO_TIMING_CHAOS_INCLUDE_DIR}/Source
         ${CMAKE_SOURCE_DIR}/tests/common
     )
 
@@ -58,6 +77,7 @@ if(SUITE_BUILD_TESTS)
 
     target_link_libraries(MicroTimingChaosTests PRIVATE
         CoreDSP
+        MicroTimingChaosAssets
         juce::juce_audio_utils
         juce::juce_audio_processors
         juce::juce_gui_basics

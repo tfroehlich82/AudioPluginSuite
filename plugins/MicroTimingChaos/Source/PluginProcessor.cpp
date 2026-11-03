@@ -28,9 +28,147 @@ MicroTimingChaosProcessor::MicroTimingChaosProcessor()
     chaos = apvts.getRawParameterValue (chaosId);
     timingRange = apvts.getRawParameterValue (timingRangeId);
     velocityChaos = apvts.getRawParameterValue (velocityChaosId);
-    speed = apvts.getRawParameterValue (speedId);
+    lerp = apvts.getRawParameterValue (lerpId);
+    lerpXMult = apvts.getRawParameterValue (lerpXMultId);
+    lerpYMult = apvts.getRawParameterValue (lerpYMultId);
+    lerpZMult = apvts.getRawParameterValue (lerpZMultId);
     bpm = apvts.getRawParameterValue (bpmId);
     sync = apvts.getRawParameterValue (syncId);
+    speed = apvts.getRawParameterValue (speedId);
+
+    for (int i = 0; i < curvePointCount; ++i)
+    {
+        const auto point = naturalCurvePoint (i);
+        curveX[(size_t) i].store (point.x);
+        curveY[(size_t) i].store (point.y);
+    }
+
+    loadLerpCurveFromState();
+}
+
+//==============================================================================
+float MicroTimingChaosProcessor::naturalCurveValue (float t) noexcept
+{
+    return std::log10 (1.0f + 9.0f * std::clamp (t, 0.0f, 1.0f));
+}
+
+juce::Point<float> MicroTimingChaosProcessor::naturalCurvePoint (int index) noexcept
+{
+    const float x = (float) juce::jlimit (0, curvePointCount - 1, index) / (float) (curvePointCount - 1);
+    return { x, naturalCurveValue (x) };
+}
+
+std::array<juce::Point<float>, MicroTimingChaosProcessor::curvePointCount> MicroTimingChaosProcessor::getLerpCurve() const
+{
+    std::array<juce::Point<float>, curvePointCount> points;
+
+    for (int i = 0; i < curvePointCount; ++i)
+        points[(size_t) i] = { curveX[(size_t) i].load (std::memory_order_relaxed),
+                               curveY[(size_t) i].load (std::memory_order_relaxed) };
+
+    return points;
+}
+
+void MicroTimingChaosProcessor::setLerpCurvePoint (int index, juce::Point<float> point)
+{
+    if (index < 0 || index >= curvePointCount)
+        return;
+
+    constexpr float minGap = 0.02f;
+    const auto i = (size_t) index;
+    float x = juce::jlimit (0.0f, 1.0f, point.x);
+
+    if (index == 0)
+        x = 0.0f;
+    else if (index == curvePointCount - 1)
+        x = 1.0f;
+    else
+        x = juce::jlimit (curveX[i - 1].load() + minGap, curveX[i + 1].load() - minGap, x);
+
+    curveX[i].store (x);
+    curveY[i].store (juce::jlimit (0.0f, 1.0f, point.y));
+
+    storeLerpCurveToState();
+}
+
+void MicroTimingChaosProcessor::resetLerpCurve()
+{
+    for (int i = 0; i < curvePointCount; ++i)
+    {
+        const auto point = naturalCurvePoint (i);
+        curveX[(size_t) i].store (point.x);
+        curveY[(size_t) i].store (point.y);
+    }
+
+    storeLerpCurveToState();
+}
+
+float MicroTimingChaosProcessor::evaluateLerpCurve (float chaos) const noexcept
+{
+    const float t = std::clamp (chaos, 0.0f, 1.0f);
+
+    for (int i = 0; i < curvePointCount - 1; ++i)
+    {
+        const auto segment = (size_t) i;
+        const float x0 = curveX[segment].load (std::memory_order_relaxed);
+        const float x1 = curveX[segment + 1].load (std::memory_order_relaxed);
+
+        if (t <= x1 || i == curvePointCount - 2)
+        {
+            const float span = x1 - x0;
+            const float alpha = span > 1.0e-6f ? std::clamp ((t - x0) / span, 0.0f, 1.0f) : 1.0f;
+            const float y0 = curveY[segment].load (std::memory_order_relaxed);
+            const float y1 = curveY[segment + 1].load (std::memory_order_relaxed);
+
+            return y0 + (y1 - y0) * alpha;
+        }
+    }
+
+    return curveY[curvePointCount - 1].load (std::memory_order_relaxed);
+}
+
+void MicroTimingChaosProcessor::loadLerpCurveFromState()
+{
+    const auto encoded = apvts.state.getProperty ("lerpCurve").toString();
+    const auto pairs = juce::StringArray::fromTokens (encoded, ";", "");
+
+    if (pairs.size() != curvePointCount)
+        return;
+
+    for (int i = 0; i < curvePointCount; ++i)
+    {
+        const auto values = juce::StringArray::fromTokens (pairs[i], ",", "");
+        if (values.size() == 2)
+        {
+            curveX[(size_t) i].store (juce::jlimit (0.0f, 1.0f, values[0].getFloatValue()));
+            curveY[(size_t) i].store (juce::jlimit (0.0f, 1.0f, values[1].getFloatValue()));
+        }
+    }
+}
+
+void MicroTimingChaosProcessor::storeLerpCurveToState()
+{
+    juce::StringArray pairs;
+
+    for (int i = 0; i < curvePointCount; ++i)
+        pairs.add (juce::String (curveX[(size_t) i].load(), 4) + "," + juce::String (curveY[(size_t) i].load(), 4));
+
+    apvts.state.setProperty ("lerpCurve", pairs.joinIntoString (";"), nullptr);
+}
+
+MicroTimingChaosProcessor::DriftAmounts MicroTimingChaosProcessor::getDriftAmounts() const noexcept
+{
+    return { driftTiming.load (std::memory_order_relaxed),
+             driftPitch.load (std::memory_order_relaxed),
+             driftVelocity.load (std::memory_order_relaxed) };
+}
+
+double MicroTimingChaosProcessor::getDisplayBpm() const
+{
+    const auto* playHead = getPlayHead();
+    const auto position = playHead != nullptr ? playHead->getPosition()
+                                              : juce::Optional<juce::AudioPlayHead::PositionInfo>();
+    return currentBpm (position);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout MicroTimingChaosProcessor::createParameterLayout()
@@ -65,13 +203,23 @@ juce::AudioProcessorValueTreeState::ParameterLayout MicroTimingChaosProcessor::c
         ParameterID { timingRangeId, 1 }, "Timing Range", NormalisableRange<float> (0.0f, (float) maxTimingRangeMs, 0.01f), 20.0f, "ms"));
     params.push_back (std::make_unique<AudioParameterFloat> (
         ParameterID { velocityChaosId, 1 }, "Velocity Chaos", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 40.0f, "%"));
+
+    // Lerp Curve
     params.push_back (std::make_unique<AudioParameterFloat> (
-        ParameterID { speedId, 1 }, "Chaos Speed", NormalisableRange<float> (0.0f, 0.5f, 0.001f, 0.5f), 0.5f, "/beat"));
+        ParameterID { lerpId, 1 }, "Lerp", NormalisableRange<float> (0.0f, 100.0f, 0.1f), 50.0f, "%"));
+    params.push_back (std::make_unique<AudioParameterFloat> (
+        ParameterID { lerpXMultId, 1 }, "Lerp X Mult", NormalisableRange<float> (0.0f, 2.0f, 0.01f), 1.0f));
+    params.push_back (std::make_unique<AudioParameterFloat> (
+        ParameterID { lerpYMultId, 1 }, "Lerp Y Mult", NormalisableRange<float> (0.0f, 2.0f, 0.01f), 1.0f));
+    params.push_back (std::make_unique<AudioParameterFloat> (
+        ParameterID { lerpZMultId, 1 }, "Lerp Z Mult", NormalisableRange<float> (0.0f, 2.0f, 0.01f), 1.0f));
 
     // Transport
     params.push_back (std::make_unique<AudioParameterFloat> (
         ParameterID { bpmId, 1 }, "Tempo", NormalisableRange<float> (40.0f, 240.0f, 0.01f), 120.0f, "BPM"));
     params.push_back (std::make_unique<AudioParameterBool> (ParameterID { syncId, 1 }, "Host Sync", false));
+    params.push_back (std::make_unique<AudioParameterFloat> (
+        ParameterID { speedId, 1 }, "Speed", NormalisableRange<float> (0.5f, 2.0f, 0.01f), 1.0f));
 
     return { params.begin(), params.end() };
 }
@@ -108,12 +256,28 @@ bool MicroTimingChaosProcessor::isBusesLayoutSupported (const BusesLayout& layou
     return input == output;
 }
 
+juce::Optional<double> MicroTimingChaosProcessor::getHostBpm () const
+{
+    const auto* playHead = getPlayHead();
+    if (playHead == nullptr)
+        return juce::Optional<double>{};
+
+    const auto position = playHead->getPosition();
+    if (! position.hasValue())
+        return juce::Optional<double>{};
+
+    const auto hostBpm = position->getBpm();
+    if (hostBpm.hasValue() && *hostBpm > 1.0)
+        return *hostBpm;
+
+    return juce::Optional<double>{};
+}
+
 double MicroTimingChaosProcessor::currentBpm (const juce::Optional<juce::AudioPlayHead::PositionInfo>& position) const
 {
     if (sync->load() > 0.5f && position.hasValue())
     {
         const auto hostBpm = position->getBpm();
-
         if (hostBpm.hasValue() && *hostBpm > 1.0)
             return *hostBpm;
     }
@@ -129,7 +293,6 @@ void MicroTimingChaosProcessor::advanceAttractorTo (double beat, double speedVal
     {
         double time = delta * speedValue;
 
-        // Advance in chunks, because the attractor caps a single call to keep a host jump from stalling the thread.
         while (time > 0.0)
         {
             const double chunk = std::min (time, CoreDSP::Chaos::LorenzAttractor::maxAdvance);
@@ -204,8 +367,6 @@ std::int64_t MicroTimingChaosProcessor::queueNoteOn (int note, int velocity, std
     const auto found = pendingOffs.find (note);
     const auto earlier = lastNoteOn.find (note);
 
-    // A note that is still queued to end must end before this onset. If its onset is later than the new one,
-    // the new onset moves to just after it, so the pairs stay in order and nothing hangs.
     if (found != pendingOffs.end() && found->second->first >= target && earlier != lastNoteOn.end())
     {
         target = std::max (target, earlier->second + 1);
@@ -226,61 +387,8 @@ void MicroTimingChaosProcessor::queueNoteOff (int note, std::int64_t target)
     pendingOffs[note] = pending.emplace (target, juce::MidiMessage::noteOff (midiChannel, note));
 }
 
-void MicroTimingChaosProcessor::scheduleStep (std::int64_t stepIndex, double stepBeat, double blockStartBeat,
-                                              double samplesPerBeat, float chaosValue, float rangeMs, float speedValue)
-{
-    using namespace CoreDSP::Sequencer;
-
-    const int lengthValue = patternLength.load (std::memory_order_relaxed);
-    const int patternIndex = (int) (((stepIndex % lengthValue) + lengthValue) % lengthValue);
-    const auto seedValue = (std::uint32_t) juce::roundToInt (seed->load());
-    const float densityValue = density->load() / 100.0f;
-    const double stepLength = stepBeats (juce::roundToInt (rate->load()));
-
-    // The attractor evolves on the grid, whether or not the step fires, so chaos never pauses.
-    advanceAttractorTo (stepBeat, speedValue);
-    publishTrailPoint();
-
-    const float x = attractor.normalisedX();
-    const float y = attractor.normalisedY();
-    const float z = attractor.normalisedZ();
-
-    if (! stepFires (seedValue, patternIndex, densityValue))
-        return;
-
-    const int scaleValue = juce::roundToInt (scale->load());
-    const int octavesValue = juce::roundToInt (octaves->load());
-    const int rootValue = juce::roundToInt (root->load());
-    const int count = degreeCount (scaleValue, octavesValue);
-
-    // The fixed melody comes from the seed. Chaos blends it towards the attractor's melody.
-    const int hashDegree = degreeFromUnit (2.0f * hashUnit (seedValue, 1000u + (std::uint32_t) patternIndex) - 1.0f,
-                                           scaleValue, octavesValue);
-    const int lorenzDegree = degreeFromUnit (y, scaleValue, octavesValue);
-    const int degree = blendDegree (hashDegree, lorenzDegree, chaosValue, count);
-    const int note = notePitch (rootValue, scaleValue, degree);
-
-    const int velocity = velocityFor (juce::roundToInt (baseVelocity->load()), velocityChaos->load() / 100.0f, z);
-
-    const double offsetMs = timingOffsetMs (chaosValue, rangeMs, x);
-    const auto offsetSamples = (std::int64_t) std::llround (offsetMs * sampleRate / 1000.0);
-    const double swingSamples = swingBeats (stepIndex, swing->load() / 100.0f, stepLength) * samplesPerBeat;
-
-    const double gridSample = (double) streamSample + (stepBeat - blockStartBeat) * samplesPerBeat;
-    const auto onTarget = std::max<std::int64_t> (streamSample,
-                                                  (std::int64_t) std::llround (gridSample + swingSamples)
-                                                      + latencySamples + offsetSamples);
-
-    const double gateSamples = gateBeats (stepLength, gate->load() / 100.0f, chaosValue, y) * samplesPerBeat;
-    const auto actualOn = queueNoteOn (note, velocity, onTarget);
-    queueNoteOff (note, actualOn + std::max<std::int64_t> (1, (std::int64_t) std::llround (gateSamples)));
-
-    publishStepEvent ({ patternIndex, (float) offsetMs, (float) velocity, note });
-}
-
 void MicroTimingChaosProcessor::stopAllNotes()
 {
-    // Drop everything still queued, then end every note that is sounding right now.
     pending.clear();
     pendingOffs.clear();
     lastNoteOn.clear();
@@ -289,11 +397,74 @@ void MicroTimingChaosProcessor::stopAllNotes()
         pending.emplace (streamSample, juce::MidiMessage::noteOff (midiChannel, note));
 }
 
+void MicroTimingChaosProcessor::scheduleStep (std::int64_t stepIndex, double stepBeat, double blockStartBeat,
+                                               double samplesPerBeat, float chaosValue, float rangeMs, float speedValue)
+{
+    using namespace CoreDSP::Sequencer;
+
+    const int lengthValue = patternLength.load (std::memory_order_relaxed);
+    const int patternIndex = (int) (((stepIndex % lengthValue) + lengthValue) % lengthValue);
+    const auto seedValue = (std::uint32_t) juce::roundToInt (seed->load());
+    const float densityValue = density->load() / 100.0f;
+    const float effectiveDensity = densityValue > 0.0f ? log1p (densityValue * 0.99f) / log1p (0.99f) : 0.0f;
+    const double stepLength = stepBeats (juce::roundToInt (rate->load()));
+
+    advanceAttractorTo (stepBeat, speedValue);
+    publishTrailPoint();
+
+    // Hybrid lerp model: each axis drifts by curve(chaos) * its multiplier, scaled by the Lerp amount.
+    const float curve = evaluateLerpCurve (chaosValue);
+    const float lerpAmount = std::clamp (lerp->load() / 100.0f, 0.0f, 1.0f);
+    const float timingAmount = std::clamp (curve * lerpXMult->load(), 0.0f, 1.0f) * lerpAmount;
+    const float pitchAmount = std::clamp (curve * lerpYMult->load(), 0.0f, 1.0f) * lerpAmount;
+    const float velocityAmount = std::clamp (curve * lerpZMult->load(), 0.0f, 1.0f) * lerpAmount;
+
+    driftTiming.store (timingAmount, std::memory_order_relaxed);
+    driftPitch.store (pitchAmount, std::memory_order_relaxed);
+    driftVelocity.store (velocityAmount, std::memory_order_relaxed);
+
+    const float x = attractor.normalisedX();
+    const float y = attractor.normalisedY();
+    const float z = attractor.normalisedZ();
+
+    if (! stepFires (seedValue, patternIndex, effectiveDensity))
+        return;
+
+    const int scaleValue = juce::roundToInt (scale->load());
+    const int octavesValue = juce::roundToInt (octaves->load());
+    const int rootValue = juce::roundToInt (root->load());
+    const int count = degreeCount (scaleValue, octavesValue);
+
+    const int hashDegree = degreeFromUnit (2.0f * hashUnit (seedValue, 1000u + (std::uint32_t) patternIndex) - 1.0f,
+                                           scaleValue, octavesValue);
+    const int lorenzDegree = degreeFromUnit (y, scaleValue, octavesValue);
+    const int degree = blendDegree (hashDegree, lorenzDegree, pitchAmount, count);
+    const int note = notePitch (rootValue, scaleValue, degree);
+
+    const int velocity = velocityFor (juce::roundToInt (baseVelocity->load()),
+                                      velocityChaos->load() / 100.0f * velocityAmount, z);
+
+    const float timingOffset = timingOffsetMs (timingAmount, rangeMs, x);
+
+    const double offsetSamples = (std::int64_t) std::llround (timingOffset * sampleRate / 1000.0);
+    const double swingSamples = swingBeats (stepIndex, swing->load() / 100.0f, stepLength) * samplesPerBeat;
+
+    const double gridSample = (double) streamSample + (stepBeat - blockStartBeat) * samplesPerBeat;
+    const auto onTarget = std::max<std::int64_t> (streamSample,
+                                                  (std::int64_t) std::llround (gridSample + swingSamples)
+                                                      + latencySamples + offsetSamples);
+
+    const double gateSamples = gateBeats (stepLength, gate->load() / 100.0f, pitchAmount, y) * samplesPerBeat;
+    const auto actualOn = queueNoteOn (note, velocity, onTarget);
+    queueNoteOff (note, actualOn + std::max<std::int64_t> (1, (std::int64_t) std::llround (gateSamples)));
+
+    publishStepEvent ({ patternIndex, timingOffset, (float) velocity, note });
+}
+
 void MicroTimingChaosProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
 
-    // Audio is passed through unchanged. The sequencer only writes MIDI.
     const int numSamples = buffer.getNumSamples();
 
     const auto* playHead = getPlayHead();
@@ -324,7 +495,6 @@ void MicroTimingChaosProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     {
         if (followHost)
         {
-            // Follow the host's position. A seek or a restart shows up as a jump and resyncs the grid.
             const auto ppq = position->getPpqPosition();
 
             if (ppq.hasValue() && (! wasRunning || std::abs (*ppq - beatPosition) > 1.0e-3))
@@ -362,13 +532,11 @@ void MicroTimingChaosProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
         beatPosition = blockEnd;
     }
 
-    // Incoming notes are passed through, delayed by the same latency as the generated ones.
     for (const auto metadata : midi)
         pending.emplace (streamSample + metadata.samplePosition + latencySamples, metadata.getMessage());
 
     midi.clear();
 
-    // Release everything due in this block, and keep track of the notes that are sounding.
     const std::int64_t blockEndSample = streamSample + numSamples;
 
     for (auto it = pending.begin(); it != pending.end() && it->first < blockEndSample;)
@@ -413,10 +581,12 @@ void MicroTimingChaosProcessor::setStateInformation (const void* data, int sizeI
     std::unique_ptr<juce::XmlElement> xml (getXmlFromBinary (data, sizeInBytes));
 
     if (xml != nullptr && xml->hasTagName (apvts.state.getType()))
+    {
         apvts.replaceState (juce::ValueTree::fromXml (*xml));
+        loadLerpCurveFromState();
+    }
 }
 
-//==============================================================================
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new MicroTimingChaosProcessor();

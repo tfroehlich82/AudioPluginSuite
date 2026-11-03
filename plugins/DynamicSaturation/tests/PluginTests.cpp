@@ -52,14 +52,14 @@ namespace
         checkRange (processor.apvts, Processor::modeId, 0.0f, 2.0f, 0.0f);
         checkRange (processor.apvts, Processor::mixId, 0.0f, 100.0f, 100.0f);
         checkRange (processor.apvts, Processor::outputLevelId, -12.0f, 6.0f, 0.0f);
-        checkRange (processor.apvts, Processor::attackId, 0.1f, 50.0f, 5.0f);
-        checkRange (processor.apvts, Processor::releaseId, 10.0f, 1000.0f, 150.0f);
+        checkRange (processor.apvts, Processor::attackId, 1.0f, 100.0f, 5.0f);
+        checkRange (processor.apvts, Processor::releaseId, 50.0f, 2000.0f, 150.0f);
         checkRange (processor.apvts, Processor::detectHpfId, 20.0f, 800.0f, 20.0f);
         checkRange (processor.apvts, Processor::stereoLinkId, 0.0f, 100.0f, 100.0f);
-        checkRange (processor.apvts, Processor::biasId, 0.0f, 0.5f, 0.2f);
-        checkRange (processor.apvts, Processor::foldId, 0.0f, 100.0f, 0.0f);
+        checkRange (processor.apvts, Processor::biasId, 0.0f, 0.25f, 0.2f);
+        checkRange (processor.apvts, Processor::foldId, 0.0f, 50.0f, 0.0f);
         checkRange (processor.apvts, Processor::toneId, -1.0f, 1.0f, 0.0f);
-        checkRange (processor.apvts, Processor::curveId, 0.5f, 2.0f, 1.0f);
+        checkRange (processor.apvts, Processor::curveId, 0.5f, 3.0f, 1.0f);
 
         pass ("testParameters");
     }

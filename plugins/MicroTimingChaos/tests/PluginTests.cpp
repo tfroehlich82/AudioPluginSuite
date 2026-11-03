@@ -94,7 +94,8 @@ namespace
                            { Processor::rateId, Processor::lengthId, Processor::densityId, Processor::seedId,
                              Processor::gateId, Processor::swingId, Processor::baseVelocityId, Processor::rootId,
                              Processor::scaleId, Processor::octavesId, Processor::chaosId, Processor::timingRangeId,
-                             Processor::velocityChaosId, Processor::speedId, Processor::bpmId, Processor::syncId },
+                             Processor::velocityChaosId, Processor::lerpId, Processor::lerpXMultId, Processor::lerpYMultId,
+                             Processor::lerpZMultId, Processor::speedId, Processor::bpmId, Processor::syncId },
                            Processor::numControls);
 
         checkRange (processor.apvts, Processor::rateId, 0.0f, 3.0f, 2.0f);
@@ -102,7 +103,7 @@ namespace
         checkRange (processor.apvts, Processor::densityId, 0.0f, 100.0f, 70.0f);
         checkRange (processor.apvts, Processor::seedId, 0.0f, 999.0f, 42.0f);
         checkRange (processor.apvts, Processor::gateId, 10.0f, 100.0f, 60.0f);
-        checkRange (processor.apvts, Processor::swingId, 0.0f, 50.0f, 0.0f);
+        checkRange (processor.apvts, Processor::swingId, -20.0f, 20.0f, 0.0f);
         checkRange (processor.apvts, Processor::baseVelocityId, 30.0f, 127.0f, 100.0f);
         checkRange (processor.apvts, Processor::rootId, 24.0f, 72.0f, 48.0f);
         checkRange (processor.apvts, Processor::scaleId, 0.0f, 5.0f, 2.0f);
@@ -110,7 +111,11 @@ namespace
         checkRange (processor.apvts, Processor::chaosId, 0.0f, 100.0f, 50.0f);
         checkRange (processor.apvts, Processor::timingRangeId, 0.0f, 50.0f, 20.0f);
         checkRange (processor.apvts, Processor::velocityChaosId, 0.0f, 100.0f, 40.0f);
-        checkRange (processor.apvts, Processor::speedId, 0.05f, 2.0f, 0.5f);
+        checkRange (processor.apvts, Processor::lerpId, 0.0f, 100.0f, 50.0f);
+        checkRange (processor.apvts, Processor::lerpXMultId, 0.0f, 2.0f, 1.0f);
+        checkRange (processor.apvts, Processor::lerpYMultId, 0.0f, 2.0f, 1.0f);
+        checkRange (processor.apvts, Processor::lerpZMultId, 0.0f, 2.0f, 1.0f);
+        checkRange (processor.apvts, Processor::speedId, 0.5f, 2.0f, 1.0f);
         checkRange (processor.apvts, Processor::bpmId, 40.0f, 240.0f, 120.0f);
         checkRange (processor.apvts, Processor::syncId, 0.0f, 1.0f, 0.0f);
 
@@ -122,6 +127,8 @@ namespace
         Processor processor;
         checkStateRoundTrip (processor, processor.apvts, Processor::lengthId, 12.0f);
         checkStateRoundTrip (processor, processor.apvts, Processor::chaosId, 80.0f);
+        checkStateRoundTrip (processor, processor.apvts, Processor::lerpId, 60.0f);
+        checkStateRoundTrip (processor, processor.apvts, Processor::lerpXMultId, 1.5f);
 
         pass ("testStateRoundTrip");
     }
@@ -202,16 +209,16 @@ namespace
         setPlain (processor);
         setParameter (processor.apvts, Processor::rateId, 0.0f);
         setParameter (processor.apvts, Processor::lengthId, 4.0f);
-        setParameter (processor.apvts, Processor::swingId, 50.0f);
+        setParameter (processor.apvts, Processor::swingId, 20.0f);
         processor.prepareToPlay (sampleRate, blockSize);
 
         int64_t sample = 0;
         const auto ons = onsOnly (run (processor, sample, 200));
 
-        // Odd steps move back by half a step, which is 12000 samples at 1/4 and 120 BPM.
+        // Odd steps move back by 20 % of a step: 4800 samples at 1/4 and 120 BPM.
         for (size_t k = 0; k < 4; ++k)
         {
-            const int64_t swing = (k % 2 == 1) ? quarterSamples / 2 : 0;
+            const int64_t swing = (k % 2 == 1) ? quarterSamples / 5 : 0;
             assert (std::abs (ons[k].time - (latency + (int64_t) k * quarterSamples + swing)) <= 1);
         }
 
@@ -614,6 +621,117 @@ namespace
         pass ("testPlayheadAndLog");
     }
 
+    void testLerpCurveDefaults()
+    {
+        Processor processor;
+        const auto points = processor.getLerpCurve();
+
+        assert (points.size() == (size_t) Processor::curvePointCount);
+        for (int i = 0; i < Processor::curvePointCount; ++i)
+            assert (std::abs (points[(size_t) i].x - (float) i / 4.0f) < 1e-6f);
+
+        // Natural default: logarithmic, so it rises quickly and then flattens
+        assert (processor.evaluateLerpCurve (0.0f) < 1e-6f);
+        assert (std::abs (processor.evaluateLerpCurve (1.0f) - 1.0f) < 1e-6f);
+        assert (std::abs (processor.evaluateLerpCurve (0.5f) - std::log10 (5.5f)) < 1e-5f);
+        assert (processor.evaluateLerpCurve (0.5f) > 0.5f);
+
+        pass ("testLerpCurveDefaults");
+    }
+
+    void testLerpCurveEditing()
+    {
+        Processor processor;
+
+        // Interior points stay between their neighbours
+        processor.setLerpCurvePoint (2, { 0.9f, 0.1f });
+        assert (processor.getLerpCurve()[2].x < processor.getLerpCurve()[3].x);
+        assert (std::abs (processor.getLerpCurve()[2].y - 0.1f) < 1e-6f);
+
+        // End points keep x fixed, and y stays in [0, 1]
+        processor.setLerpCurvePoint (0, { 0.5f, 0.7f });
+        processor.setLerpCurvePoint (4, { 0.2f, 2.0f });
+        assert (processor.getLerpCurve()[0].x == 0.0f);
+        assert (std::abs (processor.getLerpCurve()[0].y - 0.7f) < 1e-6f);
+        assert (processor.getLerpCurve()[4].x == 1.0f);
+        assert (processor.getLerpCurve()[4].y == 1.0f);
+
+        processor.resetLerpCurve();
+        assert (std::abs (processor.getLerpCurve()[2].y - std::log10 (5.5f)) < 1e-5f);
+
+        pass ("testLerpCurveEditing");
+    }
+
+    void testLerpCurveSurvivesStateRoundTrip()
+    {
+        Processor original;
+        original.setLerpCurvePoint (1, { 0.3f, 0.85f });
+
+        juce::MemoryBlock state;
+        original.getStateInformation (state);
+
+        Processor restored;
+        restored.setStateInformation (state.getData(), (int) state.getSize());
+
+        const auto before = original.getLerpCurve();
+        const auto after = restored.getLerpCurve();
+        for (size_t i = 0; i < before.size(); ++i)
+        {
+            assert (std::abs (before[i].x - after[i].x) < 1e-3f);
+            assert (std::abs (before[i].y - after[i].y) < 1e-3f);
+        }
+
+        pass ("testLerpCurveSurvivesStateRoundTrip");
+    }
+
+    // Drift is curve(chaos) * multiplier, scaled by Lerp. At Lerp 0 nothing drifts, and a zero multiplier switches its axis off.
+    void testLerpDriftIsHybrid()
+    {
+        {
+            Processor processor;
+            setPlain (processor);
+            setParameter (processor.apvts, Processor::rateId, 2.0f);
+            setParameter (processor.apvts, Processor::lengthId, 16.0f);
+            setParameter (processor.apvts, Processor::chaosId, 100.0f);
+            setParameter (processor.apvts, Processor::timingRangeId, 40.0f);
+            setParameter (processor.apvts, Processor::lerpId, 0.0f);
+            processor.prepareToPlay (sampleRate, blockSize);
+
+            int64_t sample = 0;
+            const auto ons = onsOnly (run (processor, sample, 500));
+            assert (ons.size() > 20);
+
+            for (size_t k = 0; k < ons.size(); ++k)
+                assert (std::abs (ons[k].time - (latency + (int64_t) k * sixteenthSamples)) <= 1);
+
+            assert (processor.getDriftAmounts().timing == 0.0f);
+        }
+
+        {
+            Processor processor;
+            setPlain (processor);
+            setParameter (processor.apvts, Processor::rateId, 2.0f);
+            setParameter (processor.apvts, Processor::lengthId, 16.0f);
+            setParameter (processor.apvts, Processor::chaosId, 100.0f);
+            setParameter (processor.apvts, Processor::timingRangeId, 40.0f);
+            setParameter (processor.apvts, Processor::lerpId, 100.0f);
+            setParameter (processor.apvts, Processor::lerpXMultId, 0.0f);
+            processor.prepareToPlay (sampleRate, blockSize);
+
+            int64_t sample = 0;
+            const auto ons = onsOnly (run (processor, sample, 500));
+            assert (ons.size() > 20);
+
+            for (size_t k = 0; k < ons.size(); ++k)
+                assert (std::abs (ons[k].time - (latency + (int64_t) k * sixteenthSamples)) <= 1);
+
+            assert (processor.getDriftAmounts().timing == 0.0f);
+            assert (processor.getDriftAmounts().pitch > 0.5f);
+        }
+
+        pass ("testLerpDriftIsHybrid");
+    }
+
     void testEditor()
     {
         Processor processor;
@@ -648,6 +766,10 @@ int main()
     testTransportStopSilencesNotes();
     testPassesInputNotesWithLatency();
     testPlayheadAndLog();
+    testLerpCurveDefaults();
+    testLerpCurveEditing();
+    testLerpCurveSurvivesStateRoundTrip();
+    testLerpDriftIsHybrid();
     testEditor();
 
     std::puts ("All Micro-Timing Chaos plugin tests passed.");

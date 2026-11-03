@@ -28,13 +28,13 @@ namespace
 
         checkRange (processor.apvts, SpectralDriftProcessor::driftRateId, 0.1f, 10.0f, 1.0f);
         checkRange (processor.apvts, SpectralDriftProcessor::depthId, 0.0f, 100.0f, 19.1f);
-        checkRange (processor.apvts, SpectralDriftProcessor::spreadId, 0.0f, 0.5f, 0.05f);
+        checkRange (processor.apvts, SpectralDriftProcessor::spreadId, 0.0f, 1.0f, 0.05f);
         checkRange (processor.apvts, SpectralDriftProcessor::stereoPhaseId, 0.0f, 180.0f, 90.0f);
         checkRange (processor.apvts, SpectralDriftProcessor::lfoShapeId, 0.0f, 3.0f, 0.0f);
-        checkRange (processor.apvts, SpectralDriftProcessor::shiftId, -16.0f, 16.0f, 0.0f);
-        checkRange (processor.apvts, SpectralDriftProcessor::tiltId, -1.0f, 1.0f, 0.0f);
+        checkRange (processor.apvts, SpectralDriftProcessor::shiftId, -32.0f, 32.0f, 0.0f);
+        checkRange (processor.apvts, SpectralDriftProcessor::tiltId, -2.0f, 2.0f, 0.0f);
         checkRange (processor.apvts, SpectralDriftProcessor::gateId, -90.0f, 0.0f, -90.0f);
-        checkRange (processor.apvts, SpectralDriftProcessor::feedbackId, 0.0f, 12.0f, 0.0f);
+        checkRange (processor.apvts, SpectralDriftProcessor::feedbackId, 0.0f, 20.0f, 0.0f);
         checkRange (processor.apvts, SpectralDriftProcessor::feedbackDampingId, 0.0f, 100.0f, 30.0f);
         checkRange (processor.apvts, SpectralDriftProcessor::driftStartId, 0.0f, 100.0f, 0.0f);
         checkRange (processor.apvts, SpectralDriftProcessor::outputGainId, -12.0f, 12.0f, 0.0f);

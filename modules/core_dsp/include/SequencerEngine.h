@@ -103,10 +103,10 @@ namespace CoreDSP::Sequencer
         return std::clamp (chaos, 0.0f, 1.0f) * std::clamp (x, -1.0f, 1.0f) * rangeMs;
     }
 
-    /** Swing delays every second step by swing (0 to 1) of a step. */
+    /** Swing shifts every second step by swing (-1 to +1) of a step: positive is late, negative is early. */
     inline double swingBeats (int step, float swing, double stepLengthBeats) noexcept
     {
-        return (step % 2 == 1) ? std::clamp (swing, 0.0f, 1.0f) * stepLengthBeats : 0.0;
+        return (step % 2 == 1) ? std::clamp (swing, -1.0f, 1.0f) * stepLengthBeats : 0.0;
     }
 
     /** Gate length in beats. The Lorenz Y value lengthens or shortens the gate by up to half. */
