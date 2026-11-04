@@ -24,6 +24,12 @@ namespace SuiteUI
         void setSpectra (const float* inputMagnitudes, const float* outputMagnitudes,
                          int numBins, double binWidthHz, float magnitudeScale);
 
+        /** When false, the display says it is waiting for audio instead of showing a flat trace. */
+        void setSignalPresent (bool present);
+
+        /** Text shown in place of the curve while there is no signal to draw. */
+        void setWaitingMessage (const juce::String& message);
+
         void paint (juce::Graphics&) override;
 
     private:
@@ -32,6 +38,8 @@ namespace SuiteUI
         juce::Colour inputColour, outputColour;
         std::vector<float> inputDb, outputDb;
         double binWidthHz = 1.0;
+        bool signalPresent = false;
+        juce::String waitingMessage = "Waiting for audio. Play or route a signal into the plugin.";
     };
 
     /** Phase-space plot: a fading trail of normalised (x, y) points in [-1, 1]. */

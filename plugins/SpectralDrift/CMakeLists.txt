@@ -21,12 +21,43 @@ target_sources(SpectralDrift PRIVATE
     Source/PluginEditor.h
 )
 
+suite_ui_add_to_target(SpectralDrift)
+
 target_link_libraries(SpectralDrift PRIVATE
     CoreDSP
-    SuiteUI
     juce::juce_audio_utils
     juce::juce_audio_processors
     juce::juce_gui_basics
     juce::juce_gui_extra
     juce::juce_dsp
 )
+
+# Plugin tests: the real processor and editor sources, run headless with the GUI toolkit initialised.
+if(SUITE_BUILD_TESTS)
+    add_executable(SpectralDriftTests
+        tests/PluginTests.cpp
+        Source/PluginProcessor.cpp
+        Source/PluginEditor.cpp
+    )
+
+    target_include_directories(SpectralDriftTests PRIVATE
+        Source
+        ${CMAKE_SOURCE_DIR}/tests/common
+    )
+
+    suite_ui_add_to_target(SpectralDriftTests)
+
+    target_link_libraries(SpectralDriftTests PRIVATE
+        CoreDSP
+        juce::juce_audio_utils
+        juce::juce_audio_processors
+        juce::juce_gui_basics
+        juce::juce_gui_extra
+        juce::juce_dsp
+    )
+
+    # The editor tests pump the message loop so timers fire.
+    target_compile_definitions(SpectralDriftTests PRIVATE JUCE_MODAL_LOOPS_PERMITTED=1)
+
+    add_test(NAME SpectralDrift_PluginTests COMMAND SpectralDriftTests)
+endif()

@@ -55,6 +55,7 @@ namespace SuiteUI
         juce::Path path;
         const float minFreq = 20.0f;
         const float maxFreq = 20000.0f;
+        bool started = false;
 
         for (size_t k = 1; k < decibels.size(); ++k)
         {
@@ -66,10 +67,16 @@ namespace SuiteUI
             const float x = area.getX() + std::log (freq / minFreq) / std::log (maxFreq / minFreq) * area.getWidth();
             const float y = area.getBottom() - unitInterval (decibels[k], minDb, 0.0f) * area.getHeight();
 
-            if (path.isEmpty())
+            // Path::isEmpty() stays true until a line exists, so it cannot tell whether a sub-path has started.
+            if (! started)
+            {
                 path.startNewSubPath (x, y);
+                started = true;
+            }
             else
+            {
                 path.lineTo (x, y);
+            }
         }
 
         return path;
@@ -88,8 +95,29 @@ namespace SuiteUI
             g.drawHorizontalLine ((int) (area.getBottom() - unitInterval (db, minDb, 0.0f) * area.getHeight()),
                                   area.getX(), area.getRight());
 
-        if (inputDb.empty())
+        // Frequency gridlines and labels: 100 Hz, 1 kHz and 10 kHz.
+        const float minFreq = 20.0f;
+        const float maxFreq = 20000.0f;
+        g.setFont (juce::Font (10.0f));
+
+        for (const float freq : { 100.0f, 1000.0f, 10000.0f })
+        {
+            const float x = area.getX() + std::log (freq / minFreq) / std::log (maxFreq / minFreq) * area.getWidth();
+            g.setColour (Colours::track);
+            g.drawVerticalLine ((int) x, area.getY(), area.getBottom());
+            g.setColour (Colours::textDim);
+            g.drawText (freq >= 1000.0f ? juce::String ((int) (freq / 1000.0f)) + "k" : juce::String ((int) freq),
+                        juce::Rectangle<float> (x + 2.0f, area.getBottom() - 14.0f, 40.0f, 12.0f),
+                        juce::Justification::left);
+        }
+
+        if (! signalPresent || inputDb.empty())
+        {
+            g.setColour (Colours::textDim);
+            g.setFont (juce::Font (13.0f));
+            g.drawText (waitingMessage, area, juce::Justification::centred);
             return;
+        }
 
         g.setColour (inputColour.withAlpha (0.55f));
         g.strokePath (makePath (inputDb, area), juce::PathStrokeType (1.2f));
@@ -99,6 +127,24 @@ namespace SuiteUI
         g.strokePath (outputPath, juce::PathStrokeType (5.0f));
         g.setColour (outputColour);
         g.strokePath (outputPath, juce::PathStrokeType (1.8f));
+    }
+
+    void SpectrumDisplay::setWaitingMessage (const juce::String& message)
+    {
+        if (waitingMessage != message)
+        {
+            waitingMessage = message;
+            repaint();
+        }
+    }
+
+    void SpectrumDisplay::setSignalPresent (bool present)
+    {
+        if (signalPresent != present)
+        {
+            signalPresent = present;
+            repaint();
+        }
     }
 
     //==============================================================================
@@ -294,7 +340,7 @@ namespace SuiteUI
 
         slider.setSliderStyle (style);
         slider.setTextBoxStyle (rotary ? juce::Slider::TextBoxBelow : juce::Slider::TextBoxRight,
-                                false, 64, 18);
+                                false, 84, 18);
 
         label.setText (caption, juce::dontSendNotification);
         label.setJustificationType (juce::Justification::centred);
