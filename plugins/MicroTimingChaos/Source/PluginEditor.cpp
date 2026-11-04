@@ -362,14 +362,16 @@ void MicroTimingChaosEditor::resized()
     auto modulationGroup = left.removeFromBottom (modulationGroupHeight).withWidth (modulationGroupWidth);
     left.removeFromBottom (groupGap);
 
-    attractor.setBounds (left.removeFromTop (juce::roundToInt ((float) left.getHeight() * 0.30f)));
+    attractor.setBounds (right.removeFromTop (juce::roundToInt ((float) right.getHeight() * 0.30f))));
     readout.setBounds (left.removeFromTop (22));
     left.removeFromTop (6);
     grid.setBounds (left);
     modulation.setBounds (innerOf (modulationGroup));
 
     // Right column, top to bottom, all at fixed heights: pattern, melody and chaos, lerp curve, transport
-    auto patternGroup = right.removeFromTop (patternGroupHeight);
+    auto attractorArea = right.removeFromTop (100);
+attractor.setBounds (attractorArea);
+auto patternGroup = right.removeFromTop (patternGroupHeight);
     right.removeFromTop (groupGap);
 
     auto melodyChaos = right.removeFromTop (melodyChaosGroupHeight);
@@ -383,6 +385,7 @@ void MicroTimingChaosEditor::resized()
     right.removeFromBottom (groupGap);
     auto lerpGroup = right;
 
+    groups.push_back ({ "LEAP CURVE", attractorArea });
     groups.push_back ({ "PATTERN", patternGroup });
     groups.push_back ({ "MELODY", melodyGroup });
     groups.push_back ({ "CHAOS", chaosGroup });
