@@ -4,22 +4,29 @@ namespace
 {
     namespace Palette = MicroTimingChaos::Palette;
 
-    constexpr int editorWidth = 1200;
-    constexpr int editorHeight = 980;
+    constexpr int editorWidth = 1700;
+    constexpr int editorHeight = 1380;
+    constexpr int minEditorHeight = 1180;
     constexpr int groupTitleHeight = 18;
-    constexpr int knobRowHeight = 104;
     constexpr int groupGap = 10;
+    constexpr int titleBandHeight = 34;
+    constexpr int margin = 6;
+    constexpr int helpHeight = 22;
 
-    // Fixed sizes. Only the attractor and the step grid resize with the window; everything else keeps these sizes.
-    constexpr int rightColumnWidth = 664;
-    constexpr int rightColumnGap = 14;
-    constexpr int patternGroupHeight = knobRowHeight * 2 + groupTitleHeight + 12;
-    constexpr int melodyChaosGroupHeight = knobRowHeight + groupTitleHeight + 12;
-    // The lerp group grows with the window, from 348 px. Its knobs keep the fixed size below.
-    constexpr int lerpKnobsHeight = 318;
-    constexpr int transportGroupHeight = knobRowHeight + groupTitleHeight + 12;
-    constexpr int modulationGroupHeight = 240;
-    constexpr int modulationGroupWidth = 490;
+    // Fixed group sizes, from the layout mockup. Only the attractor and the step grid resize with the window.
+    constexpr int lerpGroupWidth = 830;
+    constexpr int lerpGroupHeight = 310;
+    constexpr int attractorGap = 40;
+    constexpr int attractorHeight = 258;
+    constexpr int readoutHeight = 22;
+    constexpr int patternGroupHeight = 292;
+    constexpr int modulationGroupWidth = 797;
+    constexpr int modulationGroupHeight = 299;
+    constexpr int melodyGroupWidth = 398;
+    constexpr int chaosGroupWidth = 418;
+    constexpr int chaosGap = 13;
+    constexpr int lowerGroupHeight = 167;
+    constexpr int transportGroupWidth = 823;
 
     /** Splits an area into a grid of cells, with a little room around each one. */
     std::vector<juce::Rectangle<int>> gridCells (juce::Rectangle<int> area, int count, int columns)
@@ -142,7 +149,8 @@ MicroTimingChaosEditor::MicroTimingChaosEditor (MicroTimingChaosProcessor& p)
     setSize (editorWidth, editorHeight);
     setResizable (true, true);
     // The smallest size is the fixed right column plus the smallest sequencer and display.
-    setResizeLimits (editorWidth, editorHeight, 1800, 1200);
+    // The smallest size fits the widest row (the melody, chaos and transport groups side by side).
+    setResizeLimits (editorWidth, minEditorHeight, 2400, 1600);
 
     helpTracker.onMove = [this] (const juce::MouseEvent& e) { showHelp (e); };
     addMouseListener (&helpTracker, true);
@@ -348,50 +356,43 @@ void MicroTimingChaosEditor::resized()
 {
     groups.clear();
 
-    auto area = getLocalBounds().reduced (16);
-    area.removeFromTop (34);                       // title row, painted in paint()
-    helpLabel.setBounds (area.removeFromBottom (22));
-    area.removeFromBottom (8);
+    auto content = getLocalBounds().withTrimmedTop (titleBandHeight).reduced (margin);
+    helpLabel.setBounds (content.removeFromBottom (helpHeight));
+    content.removeFromBottom (8);
 
-    // The right column has a fixed width and sits at the right edge. The left column takes the rest.
-    auto right = area.removeFromRight (rightColumnWidth);
-    area.removeFromRight (rightColumnGap);
-    auto left = area;
+    const int x0 = content.getX();
+    const int y0 = content.getY();
+    const int right = content.getRight();
 
-    // Left column, from the bottom: the modulation panel (fixed size), then the attractor, readout and step grid
-    auto modulationGroup = left.removeFromBottom (modulationGroupHeight).withWidth (modulationGroupWidth);
-    left.removeFromBottom (groupGap);
+    // Row 1: lerp curve on the left; the attractor and its readout fill the rest of the width.
+    const juce::Rectangle<int> lerpGroup (x0, y0, lerpGroupWidth, lerpGroupHeight);
+    const int attractorX = lerpGroup.getRight() + attractorGap;
+    attractor.setBounds (attractorX, y0, right - attractorX, attractorHeight);
+    readout.setBounds (attractorX, y0 + attractorHeight + 2, right - attractorX, readoutHeight);
 
-    attractor.setBounds (left.removeFromTop (juce::roundToInt ((float) left.getHeight() * 0.30f)));
-    readout.setBounds (left.removeFromTop (22));
-    left.removeFromTop (6);
-    grid.setBounds (left);
-    modulation.setBounds (innerOf (modulationGroup));
+    // Row 2: pattern on the left, modulation on the right.
+    const int row2Y = lerpGroup.getBottom() + groupGap;
+    const juce::Rectangle<int> patternGroup (x0, row2Y, lerpGroupWidth, patternGroupHeight);
+    const juce::Rectangle<int> modulationGroup (right - modulationGroupWidth, row2Y, modulationGroupWidth, modulationGroupHeight);
 
-    // Right column, top to bottom, all at fixed heights: pattern, melody and chaos, lerp curve, transport
-    auto attractorArea = right.removeFromTop (100);
-attractor.setBounds (attractorArea);
-auto patternGroup = right.removeFromTop (patternGroupHeight);
-    right.removeFromTop (groupGap);
+    // Row 3: melody and chaos on the left, transport on the right.
+    const int row3Y = modulationGroup.getBottom() + groupGap;
+    const juce::Rectangle<int> melodyGroup (x0, row3Y, melodyGroupWidth, lowerGroupHeight);
+    const juce::Rectangle<int> chaosGroup (melodyGroup.getRight() + chaosGap, row3Y, chaosGroupWidth, lowerGroupHeight);
+    const juce::Rectangle<int> transportGroup (right - transportGroupWidth, row3Y, transportGroupWidth, lowerGroupHeight);
 
-    auto melodyChaos = right.removeFromTop (melodyChaosGroupHeight);
-    right.removeFromTop (groupGap);
-    auto melodyGroup = melodyChaos.removeFromLeft (juce::roundToInt ((float) melodyChaos.getWidth() * 0.48f));
-    melodyChaos.removeFromLeft (groupGap);
-    auto chaosGroup = melodyChaos;
+    // Row 4: the step grid across the full width, taking all remaining height.
+    const int row4Y = transportGroup.getBottom() + groupGap;
+    grid.setBounds (x0, row4Y, content.getWidth(), content.getBottom() - row4Y);
 
-    // Transport is fixed at the bottom. The lerp group takes the height in between.
-    auto transportGroup = right.removeFromBottom (transportGroupHeight);
-    right.removeFromBottom (groupGap);
-    auto lerpGroup = right;
-
-    groups.push_back ({ "LEAP CURVE", attractorArea });
+    groups.push_back ({ "LERP CURVE", lerpGroup });
     groups.push_back ({ "PATTERN", patternGroup });
+    groups.push_back ({ "MODULATION", modulationGroup });
     groups.push_back ({ "MELODY", melodyGroup });
     groups.push_back ({ "CHAOS", chaosGroup });
-    groups.push_back ({ "LERP CURVE", lerpGroup });
     groups.push_back ({ "TRANSPORT", transportGroup });
-    groups.push_back ({ "MODULATION", modulationGroup });
+
+    modulation.setBounds (innerOf (modulationGroup));
 
     // Pattern: 3 x 2
     const auto patternCells = gridCells (innerOf (patternGroup), 6, 3);
@@ -402,10 +403,11 @@ auto patternGroup = right.removeFromTop (patternGroupHeight);
     swingSlider.setBounds (patternCells[4]);
     velocitySlider.setBounds (patternCells[5]);
 
-    // Melody: root, octaves, and the scale box
+    // Melody: root (with its note name under it), octaves, and the scale box
     const auto melodyCells = gridCells (innerOf (melodyGroup), 3, 3);
-    rootSlider.setBounds (melodyCells[0]);
-    rootNoteLabel.setBounds (rootSlider.getX(), rootSlider.getBottom(), rootSlider.getWidth(), 20);
+    auto rootCell = melodyCells[0];
+    rootNoteLabel.setBounds (rootCell.removeFromBottom (18));
+    rootSlider.setBounds (rootCell);
     octavesSlider.setBounds (melodyCells[1]);
     auto scaleCell = melodyCells[2];
     scaleCaption.setBounds (scaleCell.removeFromTop (16));
@@ -417,11 +419,9 @@ auto patternGroup = right.removeFromTop (patternGroupHeight);
     timingRangeSlider.setBounds (chaosCells[1]);
     velocityChaosSlider.setBounds (chaosCells[2]);
 
-    // Lerp curve: the tabbed view on the left, the lerp and multipliers on the right
-    // The knobs keep a fixed size, at the top of the group. The curve editor fills the rest.
+    // Lerp curve: the tabbed view on the left, the four knobs on the right. The knobs fill their block.
     auto lerpInner = innerOf (lerpGroup);
-    auto lerpKnobs = lerpInner.removeFromRight (juce::roundToInt ((float) lerpInner.getWidth() * 0.36f))
-                              .withHeight (lerpKnobsHeight);
+    auto lerpKnobs = lerpInner.removeFromRight (juce::roundToInt ((float) lerpInner.getWidth() * 0.36f));
     lerpViewSelector.setBounds (lerpInner.removeFromTop (26).withWidth (210));
     lerpInner.removeFromTop (6);
     curveEditor.setBounds (lerpInner);
