@@ -4,8 +4,10 @@ namespace
 {
     namespace Palette = MicroTimingChaos::Palette;
 
+    // The layout is designed at this size. The window is shown at two thirds of it (see setScaleFactor).
     constexpr int editorWidth = 1700;
     constexpr int editorHeight = 1380;
+    constexpr float designScale = 2.0f / 3.0f;
     constexpr int minEditorHeight = 1180;
     constexpr int groupTitleHeight = 18;
     constexpr int groupGap = 10;
@@ -147,6 +149,7 @@ MicroTimingChaosEditor::MicroTimingChaosEditor (MicroTimingChaosProcessor& p)
 {
     setLookAndFeel (&lookAndFeel);
     setSize (editorWidth, editorHeight);
+    setScaleFactor (1.0f);   // applies designScale, as the host's scale is 1 at start
     setResizable (true, true);
     // The smallest size is the fixed right column plus the smallest sequencer and display.
     // The smallest size fits the widest row (the melody, chaos and transport groups side by side).
@@ -301,6 +304,11 @@ void MicroTimingChaosEditor::showHelp (const juce::MouseEvent& e)
         if (text.isNotEmpty())
             helpLabel.setText (text, juce::dontSendNotification);
     }
+}
+
+void MicroTimingChaosEditor::setScaleFactor (float newScale)
+{
+    AudioProcessorEditor::setScaleFactor (newScale * designScale);
 }
 
 void MicroTimingChaosEditor::paint (juce::Graphics& g)

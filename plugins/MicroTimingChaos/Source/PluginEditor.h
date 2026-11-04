@@ -45,6 +45,9 @@ public:
     void paint (juce::Graphics&) override;
     void resized() override;
 
+    /** The host's scale, multiplied by the design scale below, so the window is two thirds of the design size. */
+    void setScaleFactor (float newScale) override;
+
 private:
     void timerCallback() override;
     void showModulatedValues();
