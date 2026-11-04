@@ -47,6 +47,7 @@ public:
 
 private:
     void timerCallback() override;
+    void showModulatedValues();
     void showHelp (const juce::MouseEvent&);
 
     /** Forwards mouse moves from every child to the editor, so the help line follows the pointer. */

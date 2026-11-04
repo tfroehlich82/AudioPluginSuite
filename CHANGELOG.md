@@ -14,6 +14,7 @@ All notable changes to this project are documented here. The format follows
 - Micro-Timing Chaos Sequencer: a Lerp control, and X, Y and Z multipliers. Lerp scales how far each step drifts toward the attractor. Each multiplier scales one axis (timing, pitch and gate, velocity).
 - Micro-Timing Chaos Sequencer: a Curve and Preview tab. Preview shows the live drift for each axis and the timing, pitch and velocity of the last 32 steps.
 - Micro-Timing Chaos Sequencer: the BPM Sync button shows an icon and a texture when active, and the host tempo is shown under it. The Tempo knob is disabled while the sync is on.
+- Micro-Timing Chaos Sequencer: the controls show their modulated value in real time, from the LFOs and the routing. The lerp curve marker follows the modulated Chaos.
 - Micro-Timing Chaos Sequencer: two LFOs (rate in Hz or synced to 4 bars to 1/16, five shapes including Sample & Hold) and four modulation routing slots. Each slot sends an LFO to one of 14 controls, with a signed amount from −100 to +100 %. The LFO panel shows each waveform with the current position.
 - Micro-Timing Chaos Sequencer: a help line at the bottom of the editor describes the control under the pointer, and the knobs have tooltips.
 - Micro-Timing Chaos Sequencer: the editor is grouped into Pattern, Melody, Chaos, Lerp Curve and Transport.

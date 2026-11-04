@@ -448,6 +448,21 @@ float MicroTimingChaosProcessor::getTargetOffset (ModTarget target) const noexce
     return targetOffsetPublished[(size_t) target].load (std::memory_order_relaxed);
 }
 
+float MicroTimingChaosProcessor::getModulatedValue (ModTarget target, const char* parameterId) const
+{
+    const float base = apvts.getRawParameterValue (parameterId)->load();
+    const auto* parameter = targetParams[(size_t) target];
+
+    if (target == ModTarget::None || parameter == nullptr || getTargetOffset (target) == 0.0f)
+        return base;
+
+    if (target == ModTarget::Tempo && sync->load() > 0.5f)
+        return base;
+
+    const float normalised = parameter->convertTo0to1 (base);
+    return parameter->convertFrom0to1 (CoreDSP::Modulation::modulatedNormalised (normalised, getTargetOffset (target)));
+}
+
 void MicroTimingChaosProcessor::advanceAttractorTo (double beat, double speedValue)
 {
     const double delta = beat - attractorBeat;
@@ -573,9 +588,6 @@ void MicroTimingChaosProcessor::scheduleStep (std::int64_t stepIndex, double ste
     const double stepSample = (double) streamSample + (stepBeat - blockStartBeat) * samplesPerBeat;
     const auto offsets = computeOffsets (stepSample, stepBeat);
 
-    for (size_t target = 0; target < offsets.size(); ++target)
-        targetOffsetPublished[target].store (offsets[target], std::memory_order_relaxed);
-
     const int lengthValue = patternLength.load (std::memory_order_relaxed);
     const int patternIndex = (int) (((stepIndex % lengthValue) + lengthValue) % lengthValue);
     const auto seedValue = (std::uint32_t) juce::roundToInt (modulatedValue (ModTarget::Seed, seed->load(), offsets));
@@ -675,6 +687,10 @@ void MicroTimingChaosProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     // Block-start values: the LFO positions shown in the UI, and the free tempo (Tempo can only move
     // the tempo while Host Sync is off, which currentBpm() enforces).
     const auto blockOffsets = computeOffsets ((double) streamSample, beatPosition);
+
+    // Published once per block, so the controls' displays follow the LFOs in real time.
+    for (size_t target = 0; target < blockOffsets.size(); ++target)
+        targetOffsetPublished[target].store (blockOffsets[target], std::memory_order_relaxed);
 
     for (int i = 0; i < lfoCount; ++i)
     {

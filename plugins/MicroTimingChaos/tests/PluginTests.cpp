@@ -1141,6 +1141,39 @@ namespace
         pass ("testEditorWithModulation");
     }
 
+    // The value a control shows follows its routing in real time, and stays at the base value when nothing routes to it.
+    void testDisplayFollowsModulation()
+    {
+        auto spread = [] (float amount)
+        {
+            Processor processor;
+            setTimingPatch (processor, 40.0f);
+            setLfo (processor, 0, 1.0f, 0.0f, false, 4.0f);
+            setRoute (processor, 0, 0, 2, amount);
+            processor.prepareToPlay (sampleRate, blockSize);
+
+            int64_t sample = 0;
+            float lowest = 1.0e9f, highest = -1.0e9f;
+
+            for (int block = 0; block < 200; ++block)
+            {
+                run (processor, sample, 1);
+                const float shown = processor.getModulatedValue (Processor::ModTarget::TimingRange, Processor::timingRangeId);
+                assert (shown >= 0.0f && shown <= 50.0f);
+                lowest = std::min (lowest, shown);
+                highest = std::max (highest, shown);
+            }
+
+            assert (getParameter (processor.apvts, Processor::timingRangeId) == 40.0f);   // the base value is untouched
+            return highest - lowest;
+        };
+
+        assert (spread (100.0f) > 10.0f);   // the display moves with the LFO
+        assert (spread (0.0f) < 1e-4f);     // an idle route leaves the display at the base value
+
+        pass ("testDisplayFollowsModulation");
+    }
+
     void testEditor()
     {
         Processor processor;
@@ -1189,6 +1222,7 @@ int main()
     testModulationStateRoundTrip();
     testLatencyIgnoresModulation();
     testEditorWithModulation();
+    testDisplayFollowsModulation();
     testEditor();
 
     std::puts ("All Micro-Timing Chaos plugin tests passed.");

@@ -201,6 +201,10 @@ public:
     /** The offset (normalised, -1 to 1) that the routing currently adds to a target. */
     float getTargetOffset (ModTarget target) const noexcept;
 
+    /** The value a control shows right now: its base value, moved by the offset currently published for its target.
+        Tempo is shown unmodulated while Host Sync is on, as the sequencer ignores it then. */
+    float getModulatedValue (ModTarget target, const char* parameterId) const;
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
