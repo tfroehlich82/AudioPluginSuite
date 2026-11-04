@@ -214,9 +214,9 @@ AudioPluginSuite/
 ### Architecture
 
 ```
-            ┌────────────────────── plugins/<Name> ──────────────────────┐
-  host ───► │ PluginProcessor: APVTS parameters, audio/MIDI processing   │ ──► host
-            │        │ publishes lock-free snapshots (atomics)           │
+            ┌────────────────────── plugins/<Name> ───────────────────────┐
+  host ───► │ PluginProcessor: APVTS parameters, audio/MIDI processing    │ ──► host
+            │        │ publishes lock-free snapshots (atomics)            │
             │        ▼                                                    │
             │ PluginEditor: Timer (60 Hz) reads snapshots, draws widgets  │
             └──────────┬──────────────────────────────┬───────────────────┘
