@@ -166,7 +166,7 @@ MicroTimingChaosEditor::MicroTimingChaosEditor (MicroTimingChaosProcessor& p)
                               static_cast<juce::Component*> (&lengthSlider), static_cast<juce::Component*> (&densitySlider),
                               static_cast<juce::Component*> (&seedSlider), static_cast<juce::Component*> (&gateSlider),
                               static_cast<juce::Component*> (&swingSlider), static_cast<juce::Component*> (&velocitySlider),
-                              static_cast<juce::Component*> (&rootSlider), static_cast<juce::Component*> (&octavesSlider),
+                              static_cast<juce::Component*> (&rootSlider), static_cast<juce::Component*> (&rootNoteLabel), static_cast<juce::Component*> (&octavesSlider),
                               static_cast<juce::Component*> (&scaleCaption), static_cast<juce::Component*> (&scaleBox),
                               static_cast<juce::Component*> (&chaosSlider), static_cast<juce::Component*> (&timingRangeSlider),
                               static_cast<juce::Component*> (&velocityChaosSlider),
@@ -369,7 +369,9 @@ void MicroTimingChaosEditor::resized()
     modulation.setBounds (innerOf (modulationGroup));
 
     // Right column, top to bottom, all at fixed heights: pattern, melody and chaos, lerp curve, transport
-    auto patternGroup = right.removeFromTop (patternGroupHeight);
+    auto attractorArea = right.removeFromTop (100);
+attractor.setBounds (attractorArea);
+auto patternGroup = right.removeFromTop (patternGroupHeight);
     right.removeFromTop (groupGap);
 
     auto melodyChaos = right.removeFromTop (melodyChaosGroupHeight);
@@ -383,6 +385,7 @@ void MicroTimingChaosEditor::resized()
     right.removeFromBottom (groupGap);
     auto lerpGroup = right;
 
+    groups.push_back ({ "LEAP CURVE", attractorArea });
     groups.push_back ({ "PATTERN", patternGroup });
     groups.push_back ({ "MELODY", melodyGroup });
     groups.push_back ({ "CHAOS", chaosGroup });
@@ -402,6 +405,7 @@ void MicroTimingChaosEditor::resized()
     // Melody: root, octaves, and the scale box
     const auto melodyCells = gridCells (innerOf (melodyGroup), 3, 3);
     rootSlider.setBounds (melodyCells[0]);
+    rootNoteLabel.setBounds (rootSlider.getX(), rootSlider.getBottom(), rootSlider.getWidth(), 20);
     octavesSlider.setBounds (melodyCells[1]);
     auto scaleCell = melodyCells[2];
     scaleCaption.setBounds (scaleCell.removeFromTop (16));
@@ -485,4 +489,7 @@ void MicroTimingChaosEditor::timerCallback()
     {
         hostTempoLabel.setText ("FREE RUNNING", juce::dontSendNotification);
     }
+
+    // Middle C is C3 here, so MIDI 60 reads C3.
+    rootNoteLabel.setText (juce::MidiMessage::getMidiNoteName (rootValue, true, true, 3), juce::dontSendNotification);
 }

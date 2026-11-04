@@ -95,6 +95,7 @@ public:
         Velocity,
         Speed,
         Tempo,
+        Seed,
         count
     };
 

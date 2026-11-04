@@ -82,7 +82,7 @@ Two LFOs, each with a rate, a shape and a sync switch, and four routing slots. A
 | **Mod Target** | see the list below | None | The control the slot moves. None turns the slot off. |
 | **Mod Amount** | −100 to +100 % | 0 % | How far the target moves. Negative values invert the LFO. |
 
-**Targets:** Chaos, Timing Range, Velocity Chaos, Lerp, Lerp X Mult, Lerp Y Mult, Lerp Z Mult, Density, Gate, Swing, Velocity, Speed, and Tempo. Tempo only moves while Host Sync is off. Rate, Length, Seed, Scale, Root Note, Octaves and Host Sync are not modulation targets.
+**Targets:** Chaos, Timing Range, Velocity Chaos, Lerp, Lerp X Mult, Lerp Y Mult, Lerp Z Mult, Density, Gate, Swing, Velocity, Speed, Tempo and Seed. Tempo only moves while Host Sync is off. Rate, Length, Scale, Root Note, Octaves and Host Sync are not modulation targets.
 
 **How it works.** An amount of 100 % sweeps the whole range of the target, so a log or bipolar control behaves the same way. Chaos is modulated before the lerp curve, so a modulated Chaos moves along the curve. With no slot aimed at a control, nothing changes.
 

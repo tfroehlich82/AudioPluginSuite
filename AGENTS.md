@@ -172,7 +172,7 @@ Latency reported: the oversampler's integer latency, computed in `prepareToPlay`
 | `lfo1Sync` / `lfo2Sync` | LFO Sync | off / on | off | Locks the LFO to musical time |
 | `lfo1Division` / `lfo2Division` | LFO Division | 4 bars, 2 bars, 1 bar, 1/2, 1/4, 1/8, 1/16 | 1/4 | Cycle length: 16, 8, 4, 2, 1, 0.5, 0.25 beats. Used while synced |
 | `mod1Source` … `mod4Source` | Mod Source | LFO 1, LFO 2 | LFO 1 | Which LFO drives the slot |
-| `mod1Target` … `mod4Target` | Mod Target | the 14 targets in section 4.4 | None | Index 0 to 13. Append-only, see 4.4 |
+| `mod1Target` … `mod4Target` | Mod Target | the 14 targets in section 4.4 | None | Index 0 to 14. Append-only, see 4.4 |
 | `mod1Amount` … `mod4Amount` | Mod Amount | −100 – +100 % | 0 % | Signed. 0 % leaves the slot idle |
 
 The lerp curve is **not** a parameter. It is five points (x, y) stored as the `lerpCurve` property of the APVTS state (`"x,y;x,y;..."`, four decimals). `loadLerpCurveFromState()` reads it on construction and after `setStateInformation`. The first and last x are fixed at 0 and 1. The default is `y = log10(1 + 9x)`, sampled at x = 0, 0.25, 0.5, 0.75, 1.
@@ -185,7 +185,7 @@ Latency reported: 50 ms fixed (`maxTimingRangeMs`, 2400 samples at 48 kHz), rega
 
 Two LFOs and four routing slots. A slot adds `amount × LFO value` to its target, in the target's normalised range (0 to 1 across the parameter's range, so log and bipolar ranges behave the same). The result is clamped to [0, 1], and converted back with the parameter's own `convertFrom0to1`. With no slot aimed at a target, the base value is returned exactly, which is what keeps the committed output unchanged at the defaults.
 
-Targets (`ModTarget` in `PluginProcessor.h`; index order is saved in sessions, so append only): 0 None, 1 Chaos, 2 Timing Range, 3 Velocity Chaos, 4 Lerp, 5 Lerp X Mult, 6 Lerp Y Mult, 7 Lerp Z Mult, 8 Density, 9 Gate, 10 Swing, 11 Velocity (rounded), 12 Speed, 13 Tempo (applies only while Host Sync is off). Excluded on purpose: Rate, Length, Seed, Scale, Root, Octaves and Host Sync.
+Targets (`ModTarget` in `PluginProcessor.h`; index order is saved in sessions, so append only): 0 None, 1 Chaos, 2 Timing Range, 3 Velocity Chaos, 4 Lerp, 5 Lerp X Mult, 6 Lerp Y Mult, 7 Lerp Z Mult, 8 Density, 9 Gate, 10 Swing, 11 Velocity (rounded), 12 Speed, 13 Tempo (applies only while Host Sync is off), 14 Seed (changes the pattern and melody). Excluded on purpose: Rate, Length, Scale, Root, Octaves and Host Sync.
 
 LFO phase is counted in cycles. Free LFOs accumulate `rate × samples / sampleRate` at the end of each block, so a rate change never jumps the phase, and they keep running when the transport stops. Synced LFOs use `beat / divisionBeats`, where the beat is the sequencer's beat (host or internal), so they hold still when the transport stops. Sample and hold takes its seed from `lfoSeeds` and its cycle index from the unwrapped cycle count.
 
@@ -307,7 +307,7 @@ Mouse events in tests use the 15-argument `juce::MouseEvent` constructor of JUCE
 - **Parameter IDs and plugin codes are permanent.** Renaming breaks saved sessions.
 - **`COPY_PLUGIN_AFTER_BUILD FALSE`.** The JUCE default writes into Program Files, which fails without admin rights.
 - **Modulation in normalised space.** An amount of ±100 % sweeps the full range of the target, whatever its scale.
-- **Discrete targets excluded** (Rate, Length, Seed, Scale, Root, Octaves, Host Sync). They would change the pattern identity or pitch set abruptly.
+- **Discrete targets excluded** (Rate, Length, Scale, Root, Octaves, Host Sync). They would change the length or pitch set abruptly. Seed is a target since commit 5eff266: it is read through `modulatedValue`, so a modulated seed changes the pattern and melody.
 - **Tempo modulation applies only while Host Sync is off**, because the host tempo is authoritative when synced.
 - **Modulation applies before the lerp curve**, so a modulated Chaos moves along the curve.
 - **The routing and LFO settings are plain APVTS parameters**, so they automate, save and restore like the rest.
