@@ -96,7 +96,6 @@ public:
         Speed,
         Tempo,
         Seed,
-        Seed,
         count
     };
 

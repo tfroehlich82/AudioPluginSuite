@@ -166,7 +166,7 @@ MicroTimingChaosEditor::MicroTimingChaosEditor (MicroTimingChaosProcessor& p)
                               static_cast<juce::Component*> (&lengthSlider), static_cast<juce::Component*> (&densitySlider),
                               static_cast<juce::Component*> (&seedSlider), static_cast<juce::Component*> (&gateSlider),
                               static_cast<juce::Component*> (&swingSlider), static_cast<juce::Component*> (&velocitySlider),
-                              static_cast<juce::Component*> (&rootSlider), static_cast<juce::Component*> (&octavesSlider),
+                              static_cast<juce::Component*> (&rootSlider), static_cast<juce::Component*> (&rootNoteLabel), static_cast<juce::Component*> (&octavesSlider),
                               static_cast<juce::Component*> (&scaleCaption), static_cast<juce::Component*> (&scaleBox),
                               static_cast<juce::Component*> (&chaosSlider), static_cast<juce::Component*> (&timingRangeSlider),
                               static_cast<juce::Component*> (&velocityChaosSlider),
@@ -405,6 +405,7 @@ auto patternGroup = right.removeFromTop (patternGroupHeight);
     // Melody: root, octaves, and the scale box
     const auto melodyCells = gridCells (innerOf (melodyGroup), 3, 3);
     rootSlider.setBounds (melodyCells[0]);
+    rootNoteLabel.setBounds (rootSlider.getX(), rootSlider.getBottom(), rootSlider.getWidth(), 20);
     octavesSlider.setBounds (melodyCells[1]);
     auto scaleCell = melodyCells[2];
     scaleCaption.setBounds (scaleCell.removeFromTop (16));
@@ -487,5 +488,6 @@ void MicroTimingChaosEditor::timerCallback()
     else
     {
         hostTempoLabel.setText ("FREE RUNNING", juce::dontSendNotification);
+        rootNoteLabel.setText (juce::MidiMessage::getMidiNoteName (rootValue, true, true), juce::dontSendNotification);
     }
 }

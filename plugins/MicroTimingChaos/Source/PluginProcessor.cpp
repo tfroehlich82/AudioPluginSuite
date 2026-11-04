@@ -85,6 +85,7 @@ MicroTimingChaosProcessor::MicroTimingChaosProcessor()
     targetParams[(size_t) ModTarget::Velocity] = apvts.getParameter (baseVelocityId);
     targetParams[(size_t) ModTarget::Speed] = apvts.getParameter (speedId);
     targetParams[(size_t) ModTarget::Tempo] = apvts.getParameter (bpmId);
+    targetParams[(size_t) ModTarget::Seed] = apvts.getParameter (seedId);
 
     for (int i = 0; i < curvePointCount; ++i)
     {
@@ -100,7 +101,7 @@ juce::StringArray MicroTimingChaosProcessor::modTargetNames()
 {
     // Must follow the ModTarget enum order exactly.
     return { "None", "Chaos", "Timing Range", "Velocity Chaos", "Lerp", "Lerp X Mult", "Lerp Y Mult",
-             "Lerp Z Mult", "Density", "Gate", "Swing", "Velocity", "Speed", "Tempo" };
+             "Lerp Z Mult", "Density", "Gate", "Swing", "Velocity", "Speed", "Tempo", "Seed" };
 }
 
 //==============================================================================
