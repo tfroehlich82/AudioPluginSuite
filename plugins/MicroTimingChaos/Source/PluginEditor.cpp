@@ -5,30 +5,33 @@ namespace
     namespace Palette = MicroTimingChaos::Palette;
 
     // The layout is designed at this size. The window is shown at two thirds of it (see setScaleFactor).
-    constexpr int editorWidth = 1700;
-    constexpr int editorHeight = 1380;
     constexpr float designScale = 2.0f / 3.0f;
-    constexpr int minEditorHeight = 1180;
     constexpr int groupTitleHeight = 18;
-    constexpr int groupGap = 10;
     constexpr int titleBandHeight = 34;
-    constexpr int margin = 6;
     constexpr int helpHeight = 22;
 
-    // Fixed group sizes, from the layout mockup. Only the attractor and the step grid resize with the window.
-    constexpr int lerpGroupWidth = 830;
+    // One gap for everything: the outer margin, and the space between every pair of groups, horizontally and vertically.
+    constexpr int groupGap = 14;
+
+    // Column widths. Left column: lerp, pattern, melody and chaos. Right column: attractor, modulation, transport.
+    constexpr int leftColumnWidth = 830;
+    constexpr int rightColumnWidth = 823;
+    constexpr int editorWidth = 3 * groupGap + leftColumnWidth + rightColumnWidth;   // 1695
+
+    // Row heights. The lerp group and the attractor share a row; pattern and modulation share the next.
     constexpr int lerpGroupHeight = 310;
-    constexpr int attractorGap = 40;
-    constexpr int attractorHeight = 258;
     constexpr int readoutHeight = 22;
-    constexpr int patternGroupHeight = 292;
-    constexpr int modulationGroupWidth = 797;
-    constexpr int modulationGroupHeight = 299;
-    constexpr int melodyGroupWidth = 398;
-    constexpr int chaosGroupWidth = 418;
-    constexpr int chaosGap = 13;
+    constexpr int attractorHeight = lerpGroupHeight - readoutHeight - 2;
+    constexpr int rowTwoHeight = 299;
     constexpr int lowerGroupHeight = 167;
-    constexpr int transportGroupWidth = 823;
+    constexpr int gridMinHeight = 300;
+    constexpr int editorHeight = 1380;
+    constexpr int minEditorHeight = titleBandHeight + 4 * groupGap + lerpGroupHeight + rowTwoHeight
+                                    + lowerGroupHeight + gridMinHeight + helpHeight + groupGap;
+
+    // Lower row inside the left column: melody and chaos fill its width exactly.
+    constexpr int melodyGroupWidth = 398;
+    constexpr int chaosGroupWidth = leftColumnWidth - melodyGroupWidth - groupGap;   // 418
 
     /** Splits an area into a grid of cells, with a little room around each one. */
     std::vector<juce::Rectangle<int>> gridCells (juce::Rectangle<int> area, int count, int columns)
@@ -364,30 +367,32 @@ void MicroTimingChaosEditor::resized()
 {
     groups.clear();
 
-    auto content = getLocalBounds().withTrimmedTop (titleBandHeight).reduced (margin);
+    // Every gap is groupGap: the outer margin, and the space between groups in both directions.
+    auto content = getLocalBounds().withTrimmedTop (titleBandHeight).reduced (groupGap);
     helpLabel.setBounds (content.removeFromBottom (helpHeight));
-    content.removeFromBottom (8);
+    content.removeFromBottom (groupGap);
 
     const int x0 = content.getX();
     const int y0 = content.getY();
     const int right = content.getRight();
+    const int rightX = right - rightColumnWidth;
 
-    // Row 1: lerp curve on the left; the attractor and its readout fill the rest of the width.
-    const juce::Rectangle<int> lerpGroup (x0, y0, lerpGroupWidth, lerpGroupHeight);
-    const int attractorX = lerpGroup.getRight() + attractorGap;
+    // Row 1: lerp curve on the left; the attractor and its readout fill the right column's width.
+    const juce::Rectangle<int> lerpGroup (x0, y0, leftColumnWidth, lerpGroupHeight);
+    const int attractorX = lerpGroup.getRight() + groupGap;
     attractor.setBounds (attractorX, y0, right - attractorX, attractorHeight);
     readout.setBounds (attractorX, y0 + attractorHeight + 2, right - attractorX, readoutHeight);
 
-    // Row 2: pattern on the left, modulation on the right.
+    // Row 2: pattern on the left, modulation on the right, both the same height.
     const int row2Y = lerpGroup.getBottom() + groupGap;
-    const juce::Rectangle<int> patternGroup (x0, row2Y, lerpGroupWidth, patternGroupHeight);
-    const juce::Rectangle<int> modulationGroup (right - modulationGroupWidth, row2Y, modulationGroupWidth, modulationGroupHeight);
+    const juce::Rectangle<int> patternGroup (x0, row2Y, leftColumnWidth, rowTwoHeight);
+    const juce::Rectangle<int> modulationGroup (rightX, row2Y, rightColumnWidth, rowTwoHeight);
 
     // Row 3: melody and chaos on the left, transport on the right.
-    const int row3Y = modulationGroup.getBottom() + groupGap;
+    const int row3Y = patternGroup.getBottom() + groupGap;
     const juce::Rectangle<int> melodyGroup (x0, row3Y, melodyGroupWidth, lowerGroupHeight);
-    const juce::Rectangle<int> chaosGroup (melodyGroup.getRight() + chaosGap, row3Y, chaosGroupWidth, lowerGroupHeight);
-    const juce::Rectangle<int> transportGroup (right - transportGroupWidth, row3Y, transportGroupWidth, lowerGroupHeight);
+    const juce::Rectangle<int> chaosGroup (melodyGroup.getRight() + groupGap, row3Y, chaosGroupWidth, lowerGroupHeight);
+    const juce::Rectangle<int> transportGroup (rightX, row3Y, rightColumnWidth, lowerGroupHeight);
 
     // Row 4: the step grid across the full width, taking all remaining height.
     const int row4Y = transportGroup.getBottom() + groupGap;
