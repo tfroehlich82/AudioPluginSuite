@@ -362,7 +362,7 @@ void MicroTimingChaosEditor::resized()
     auto modulationGroup = left.removeFromBottom (modulationGroupHeight).withWidth (modulationGroupWidth);
     left.removeFromBottom (groupGap);
 
-    attractor.setBounds (right.removeFromTop (juce::roundToInt ((float) right.getHeight() * 0.30f))));
+    attractor.setBounds (left.removeFromTop (juce::roundToInt ((float) left.getHeight() * 0.30f)));
     readout.setBounds (left.removeFromTop (22));
     left.removeFromTop (6);
     grid.setBounds (left);
@@ -488,6 +488,8 @@ void MicroTimingChaosEditor::timerCallback()
     else
     {
         hostTempoLabel.setText ("FREE RUNNING", juce::dontSendNotification);
-        rootNoteLabel.setText (juce::MidiMessage::getMidiNoteName (rootValue, true, true), juce::dontSendNotification);
     }
+
+    // Middle C is C3 here, so MIDI 60 reads C3.
+    rootNoteLabel.setText (juce::MidiMessage::getMidiNoteName (rootValue, true, true, 3), juce::dontSendNotification);
 }

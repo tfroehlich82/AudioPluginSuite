@@ -139,7 +139,7 @@ namespace
         for (int slot = 0; slot < Processor::slotCount; ++slot)
         {
             checkRange (processor.apvts, Processor::modSourceIds[slot], 0.0f, 1.0f, 0.0f);
-            checkRange (processor.apvts, Processor::modTargetIds[slot], 0.0f, 13.0f, 0.0f);
+            checkRange (processor.apvts, Processor::modTargetIds[slot], 0.0f, 14.0f, 0.0f);
             checkRange (processor.apvts, Processor::modAmountIds[slot], -100.0f, 100.0f, 0.0f);
         }
 
@@ -1064,7 +1064,7 @@ namespace
     // Every target keeps its value in range, and the Velocity target always yields whole velocities from 1 to 127.
     void testTargetsStayInRange()
     {
-        const int targets[] = { 1, 4, 8, 9, 10, 11, 13 };          // Chaos, Lerp, Density, Gate, Swing, Velocity, Tempo
+        const int targets[] = { 1, 4, 8, 9, 10, 11, 13, 14 };      // Chaos, Lerp, Density, Gate, Swing, Velocity, Tempo, Seed
 
         for (const int target : targets)
         {
