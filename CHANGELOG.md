@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `modules/suite_modulation`: a shared module with the two LFOs, six routing slots, the LFO scope and the modulation panel, for plugins to reuse. It is not used by any plugin yet, so Micro-Timing Chaos still runs its own copy. The routing math matches that copy.
 - Spectral Drift Shifter: fourteen controls in total. Drift Depth, Bin Spread, Stereo Phase, LFO Shape (sine, triangle, saw, square), Spectral Shift (±32 bins), Spectral Tilt (±2), Spectral Gate, Feedback Damping, Drift Start and Output Gain.
 - Dynamic Saturation Companion: thirteen controls. Attack, Release, Detect HPF, Stereo Link, Tube Bias, Fold, Tone and Envelope Curve are new.
 - Dynamic Saturation Companion now runs its shaper at 2× oversampling. The latency is reported to the host.

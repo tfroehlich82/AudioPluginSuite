@@ -50,6 +50,7 @@ target_include_directories(MicroTimingChaos PRIVATE
 )
 
 suite_ui_add_to_target(MicroTimingChaos)
+suite_modulation_add_to_target(MicroTimingChaos)
 
 target_link_libraries(MicroTimingChaos PRIVATE
     CoreDSP

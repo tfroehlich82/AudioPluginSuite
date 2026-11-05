@@ -42,6 +42,11 @@ modules/
     include/ModulationEngine.h    CoreDSP::Modulation: LFO shapes (cycles in, value in [-1, 1]) and the normalised offset clamp
     tests/DSPTests.cpp            CoreDSPTests (28 test functions)
     CMakeLists.txt                CoreDSP INTERFACE target, CoreDSPTests
+  suite_modulation/               Shared LFOs, routing slots, LFO scope and panel. NOT a library target, see section 8.
+                                  Not yet used by a plugin: Micro-Timing Chaos still has its own copy in plugins/MicroTimingChaos
+    include/SuiteModulationRouter.h, SuiteModulationScope.h, SuiteModulationPanel.h
+    Source/*.cpp                  Implementations
+    suite_modulation.cmake        suite_modulation_add_to_target(<target>): adds sources + include dir
   suite_ui/                       Shared UI. NOT a library target, see section 8
     include/SuiteLookAndFeel.h    Colours namespace, SuiteLookAndFeel (LookAndFeel_V4)
     include/SuiteWidgets.h        SpectrumDisplay, TrailPlot, CurveView, LevelMeter, SegmentedSelector, LabelledSlider
