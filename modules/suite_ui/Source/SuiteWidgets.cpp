@@ -285,6 +285,12 @@ namespace SuiteUI
         repaint();
     }
 
+    void SegmentedSelector::setFontHeight (float height)
+    {
+        fontHeight = height;
+        repaint();
+    }
+
     void SegmentedSelector::paint (juce::Graphics& g)
     {
         const auto area = getLocalBounds().toFloat().reduced (1.0f);
@@ -309,7 +315,7 @@ namespace SuiteUI
             }
 
             g.setColour (isSelected ? accent : Colours::textDim);
-            g.setFont (juce::Font (13.0f, isSelected ? juce::Font::bold : juce::Font::plain));
+            g.setFont (juce::Font (fontHeight, isSelected ? juce::Font::bold : juce::Font::plain));
             g.drawText (options[i], segment, juce::Justification::centred);
         }
     }

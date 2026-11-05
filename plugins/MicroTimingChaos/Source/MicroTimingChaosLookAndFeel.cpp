@@ -170,11 +170,11 @@ namespace MicroTimingChaos
         auto textArea = bounds.reduced (6.0f, 0.0f);
 
         g.setColour (active ? Palette::text : Palette::textDim);
-        g.setFont (juce::Font (12.0f, juce::Font::bold));
+        g.setFont (juce::Font (14.0f, juce::Font::bold));
         g.drawText (button.getButtonText(), textArea.withTrimmedRight (34.0f), juce::Justification::centredLeft);
 
         g.setColour (colour);
-        g.setFont (juce::Font (10.0f, juce::Font::bold));
+        g.setFont (juce::Font (13.0f, juce::Font::bold));
         g.drawText (active ? "ON" : "OFF", textArea.removeFromRight (30.0f), juce::Justification::centredRight);
     }
 
@@ -203,5 +203,20 @@ namespace MicroTimingChaos
     {
         label.setBounds (box.getLocalBounds().reduced (10, 1).withTrimmedRight (14));
         label.setFont (getComboBoxFont (box));
+    }
+
+    juce::Font LookAndFeel::getLabelFont (juce::Label&)
+    {
+        return juce::Font (14.0f);
+    }
+
+    juce::Font LookAndFeel::getComboBoxFont (juce::ComboBox&)
+    {
+        return juce::Font (14.0f);
+    }
+
+    juce::Font LookAndFeel::getPopupMenuFont()
+    {
+        return juce::Font (14.0f);
     }
 }

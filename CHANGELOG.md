@@ -14,8 +14,10 @@ All notable changes to this project are documented here. The format follows
 - Micro-Timing Chaos Sequencer: a Lerp control, and X, Y and Z multipliers. Lerp scales how far each step drifts toward the attractor. Each multiplier scales one axis (timing, pitch and gate, velocity).
 - Micro-Timing Chaos Sequencer: a Curve and Preview tab. Preview shows the live drift for each axis and the timing, pitch and velocity of the last 32 steps.
 - Micro-Timing Chaos Sequencer: the BPM Sync button shows an icon and a texture when active, and the host tempo is shown under it. The Tempo knob is disabled while the sync is on.
+- Micro-Timing Chaos Sequencer: the sequencer view is redrawn, with timing guides, a lit playhead, firing bars, a trail through recent notes and fading dots.
+- Micro-Timing Chaos Sequencer: the interface uses larger text throughout, smaller knobs, one colour for all group titles, framed attractor and sequencer groups, a root note that shows its name in the value box (C2 (48)), and clearer tab, rate and BPM Sync controls.
 - Micro-Timing Chaos Sequencer: the controls show their modulated value in real time, from the LFOs and the routing. The lerp curve marker follows the modulated Chaos.
-- Micro-Timing Chaos Sequencer: two LFOs (rate in Hz or synced to 4 bars to 1/16, five shapes including Sample & Hold) and four modulation routing slots. Each slot sends an LFO to one of 14 controls, with a signed amount from −100 to +100 %. The LFO panel shows each waveform with the current position.
+- Micro-Timing Chaos Sequencer: two LFOs (rate in Hz or synced to 4 bars to 1/16, seven shapes including Sample & Hold, Random and Noise) and six modulation routing slots. Each slot sends an LFO to one of 14 controls, with a signed amount from −100 to +100 %. The LFO panel shows each waveform with the current position.
 - Micro-Timing Chaos Sequencer: a help line at the bottom of the editor describes the control under the pointer, and the knobs have tooltips.
 - Micro-Timing Chaos Sequencer: the editor is grouped into Pattern, Melody, Chaos, Lerp Curve and Transport.
 - Plugin test executables for all three plugins. They cover parameters, state, latency, bus layouts, audio behaviour, MIDI timing and the editor.
@@ -32,7 +34,7 @@ All notable changes to this project are documented here. The format follows
 - Spectral Drift Shifter: the preview says "Waiting for audio" until signal arrives, and has frequency labels. Before, a silent input left the panel blank with nothing to explain it.
 - Dynamic Saturation Companion: Attack is 1 to 100 ms (was 0.1 to 50), Release is 50 to 2000 ms (was 10 to 1000), Envelope Curve is 0.5 to 3.0 (was 0.5 to 2.0), Tube Bias is 0 to 0.25 (was 0 to 0.5), and Fold is 0 to 50 % (was 0 to 100 %).
 - Micro-Timing Chaos Sequencer: Swing is documented as −20 to +20 % (the README said 0 to 50 %). Negative values move the odd steps early.
-- Micro-Timing Chaos Sequencer: 40 parameters (was 20). The 20 new ones are the LFOs and the routing slots.
+- Micro-Timing Chaos Sequencer: 46 parameters (was 20). The 26 new ones are the LFOs and the six routing slots.
 - Micro-Timing Chaos Sequencer: Chaos now drives the lerp curve. Timing, pitch and velocity drift are scaled by Lerp and the multipliers, so at the defaults the sequencer is quieter than before. Velocity variation at the defaults is about ±7 %, against about ±20 % before.
 - Micro-Timing Chaos Sequencer: the Chaos Speed control is now Speed, 0.5 to 2.0, default 1.0 (was 0 to 0.5 per beat, default 0.5).
 - Micro-Timing Chaos Sequencer: declares a stereo audio pass-through bus, so VST3 hosts that drop audio-less effects can load it. The MIDI behaviour is unchanged.
@@ -44,6 +46,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- Micro-Timing Chaos Sequencer: the Random and Noise LFO shapes are smooth random curves (value noise) instead of a line and a zigzag.
+- Micro-Timing Chaos Sequencer: the step view showed the pattern for the base Density, Seed and Timing Range, and not the modulated values or the density curve the sequencer uses. It now shows the pattern that plays.
 - Dynamic Saturation Companion: the output is held to ±1 before the output level, so oversampler and tone overshoot cannot exceed the stage ceiling.
 - Micro-Timing Chaos Sequencer: note-offs are clamped so they never precede their note-on.
 - Micro-Timing Chaos Sequencer: negative swing was ignored, because the engine clamped swing to 0 to 1.

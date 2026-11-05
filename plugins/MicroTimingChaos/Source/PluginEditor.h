@@ -91,7 +91,6 @@ private:
     // Melody
     SuiteUI::LabelledSlider rootSlider { "ROOT", juce::Slider::RotaryVerticalDrag };
     SuiteUI::LabelledSlider octavesSlider { "OCTAVES", juce::Slider::RotaryVerticalDrag };
-    juce::Label rootNoteLabel;
 juce::Label scaleCaption;
     juce::ComboBox scaleBox;
 

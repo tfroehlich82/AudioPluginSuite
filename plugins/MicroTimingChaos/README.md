@@ -70,12 +70,12 @@ Each drift is then applied to its axis: the timing offset, the blend between the
 
 ## LFO and Modulation
 
-Two LFOs, each with a rate, a shape and a sync switch, and four routing slots. A slot sends one LFO to one control, with a signed amount.
+Two LFOs, each with a rate, a shape and a sync switch, and six routing slots. A slot sends one LFO to one control, with a signed amount.
 
 | Control | Range | Default | Description |
 |---|---|---|---|
 | **LFO Rate** | 0.02 – 20 Hz (logarithmic) | 0.25 Hz | How fast the LFO cycles. Disabled while its Sync is on. |
-| **LFO Shape** | Sine, Triangle, Saw, Square, Sample & Hold | Sine | The waveform. Sample & Hold picks a new random level on each cycle. |
+| **LFO Shape** | Sine, Triangle, Saw, Square, Sample & Hold, Random, Noise | Sine | The waveform. Sample & Hold picks a new random level on each cycle. |
 | **LFO Sync** | on / off | off | Locks the LFO to musical time. |
 | **LFO Division** | 4 bars, 2 bars, 1 bar, 1/2, 1/4, 1/8, 1/16 | 1/4 | The cycle length while synced. |
 | **Mod Source** | LFO 1, LFO 2 | LFO 1 | Which LFO drives the slot. |

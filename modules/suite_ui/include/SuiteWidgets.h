@@ -98,6 +98,9 @@ namespace SuiteUI
 
         void setOptions (const juce::StringArray& labels);
 
+        /** Sets the label font height in pixels. The default, 13, is used by the other plugins. */
+        void setFontHeight (float height);
+
         /** Updates the display without calling onChange. */
         void setSelectedIndex (int index);
         int getSelectedIndex() const noexcept { return selected; }
@@ -112,6 +115,7 @@ namespace SuiteUI
         juce::Colour accent;
         juce::StringArray options;
         int selected = 0;
+        float fontHeight = 13.0f;
     };
 
     /** A slider with a caption above it. Rotary sliders get their value box below the knob. */

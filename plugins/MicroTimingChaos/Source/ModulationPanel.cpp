@@ -6,14 +6,14 @@ namespace
 {
     namespace Palette = MicroTimingChaos::Palette;
 
-    constexpr int lfoKnobWidth = 84;
-    constexpr int scopeHeight = 38;
-    constexpr int controlHeight = 20;
-    constexpr int lfoBlockHeight = 96;
-    constexpr int headingHeight = 14;
-    constexpr int slotRowHeight = 22;
+    constexpr int lfoKnobWidth = 110;
+    constexpr int scopeHeight = 46;
+    constexpr int controlHeight = 26;
+    constexpr int lfoBlockHeight = 120;
+    constexpr int headingHeight = 16;
+    constexpr int slotRowHeight = 26;
 
-    const juce::StringArray shapeNames { "Sine", "Triangle", "Saw", "Square", "Sample & Hold" };
+    const juce::StringArray shapeNames { "Sine", "Triangle", "Saw", "Square", "Sample & Hold", "Random", "Noise" };
     const juce::StringArray divisionNames { "4 bars", "2 bars", "1 bar", "1/2", "1/4", "1/8", "1/16" };
     const juce::StringArray sourceNames { "LFO 1", "LFO 2" };
 
@@ -27,7 +27,7 @@ namespace
 struct ModulationPanel::LfoStrip
 {
     LfoStrip (MicroTimingChaosProcessor& processor, int index, const char* rateId, const char* shapeId,
-              const char* syncId, const char* divisionId, juce::Colour colour)
+                const char* syncId, const char* divisionId, juce::Colour colour)
         : rate ("RATE", juce::Slider::RotaryVerticalDrag),
           scope (processor, index, shapeId, colour)
     {
@@ -67,7 +67,7 @@ struct ModulationPanel::SlotRow
     {
         source.addItemList (sourceNames, 1);
         target.addItemList (MicroTimingChaosProcessor::modTargetNames(), 1);
-        amount.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 18);
+        amount.setTextBoxStyle (juce::Slider::TextBoxRight, false, 72, 22);
         amount.setTextValueSuffix (" %");
         amount.setNumDecimalPlacesToDisplay (0);
 
@@ -100,11 +100,11 @@ ModulationPanel::ModulationPanel (MicroTimingChaosProcessor& p)
     setOpaque (false);
 
     lfos[0] = std::make_unique<LfoStrip> (processor, 0, MicroTimingChaosProcessor::lfo1RateId,
-                                          MicroTimingChaosProcessor::lfo1ShapeId, MicroTimingChaosProcessor::lfo1SyncId,
-                                          MicroTimingChaosProcessor::lfo1DivisionId, Palette::timing);
+                                            MicroTimingChaosProcessor::lfo1ShapeId, MicroTimingChaosProcessor::lfo1SyncId,
+                                            MicroTimingChaosProcessor::lfo1DivisionId, juce::Colours::purple);
     lfos[1] = std::make_unique<LfoStrip> (processor, 1, MicroTimingChaosProcessor::lfo2RateId,
-                                          MicroTimingChaosProcessor::lfo2ShapeId, MicroTimingChaosProcessor::lfo2SyncId,
-                                          MicroTimingChaosProcessor::lfo2DivisionId, Palette::pitch);
+                                            MicroTimingChaosProcessor::lfo2ShapeId, MicroTimingChaosProcessor::lfo2SyncId,
+                                            MicroTimingChaosProcessor::lfo2DivisionId, juce::Colours::orange);
 
     for (int slot = 0; slot < MicroTimingChaosProcessor::slotCount; ++slot)
         slots[slot] = std::make_unique<SlotRow> (processor, slot);
@@ -136,7 +136,7 @@ void ModulationPanel::refresh()
     {
         auto& lfo = *lfos[i];
         const bool synced = processor.apvts.getRawParameterValue (i == 0 ? MicroTimingChaosProcessor::lfo1SyncId
-                                                                       : MicroTimingChaosProcessor::lfo2SyncId)->load() > 0.5f;
+                                                                     : MicroTimingChaosProcessor::lfo2SyncId)->load() > 0.5f;
 
         lfo.rate.setEnabled (! synced);
         lfo.division.setEnabled (synced);
@@ -166,7 +166,7 @@ void ModulationPanel::resized()
         cell.removeFromTop (4);
 
         auto row = cell.removeFromTop (controlHeight);
-        lfo.sync.setBounds (row.removeFromLeft (row.getWidth() / 3));
+        lfo.sync.setBounds (row.removeFromLeft (row.getWidth() / 2));
         row.removeFromLeft (4);
         lfo.division.setBounds (row);
     }
@@ -199,7 +199,7 @@ void ModulationPanel::paint (juce::Graphics& g)
     const int targetWidth = juce::roundToInt ((float) getWidth() * 0.40f);
 
     g.setColour (Palette::textDim);
-    g.setFont (juce::Font (9.0f, juce::Font::bold));
+    g.setFont (juce::Font (12.0f, juce::Font::bold));
 
     g.drawText ("SOURCE", juce::Rectangle<int> (0, headingY, sourceWidth, headingHeight), juce::Justification::centredLeft);
     g.drawText ("TARGET", juce::Rectangle<int> (sourceWidth + 6, headingY, targetWidth, headingHeight), juce::Justification::centredLeft);

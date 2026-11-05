@@ -6,8 +6,8 @@ namespace
 {
     namespace Palette = MicroTimingChaos::Palette;
 
-    constexpr float meterRowHeight = 20.0f;
-    constexpr float laneLabelWidth = 64.0f;
+    constexpr float meterRowHeight = 26.0f;
+    constexpr float laneLabelWidth = 84.0f;
     constexpr float dotRadius = 3.5f;
     constexpr int pitchSpanSemitones = 36;     // the pitch lane shows root - 12 to root + 24
     constexpr int pitchLowestOffset = -12;
@@ -15,10 +15,10 @@ namespace
     void drawMeter (juce::Graphics& g, juce::Rectangle<float> row, const char* label, float amount, juce::Colour colour)
     {
         auto labelArea = row.removeFromLeft (laneLabelWidth);
-        auto valueArea = row.removeFromRight (46.0f);
+        auto valueArea = row.removeFromRight (60.0f);
 
         g.setColour (Palette::textDim);
-        g.setFont (juce::Font (10.0f, juce::Font::bold));
+        g.setFont (juce::Font (13.0f, juce::Font::bold));
         g.drawText (label, labelArea, juce::Justification::centredLeft);
 
         g.setColour (Palette::track);
@@ -28,7 +28,7 @@ namespace
         g.fillRoundedRectangle (row.reduced (0.0f, 6.0f).withWidth (row.getWidth() * juce::jlimit (0.0f, 1.0f, amount)), 3.0f);
 
         g.setColour (Palette::text);
-        g.setFont (juce::Font (11.0f));
+        g.setFont (juce::Font (13.0f));
         g.drawText (juce::String (juce::roundToInt (amount * 100.0f)) + " %", valueArea, juce::Justification::centredRight);
     }
 }
@@ -68,7 +68,7 @@ void LerpPreview::paint (juce::Graphics& g)
     area.removeFromBottom (4.0f);
 
     g.setColour (Palette::textDim);
-    g.setFont (juce::Font (9.0f));
+    g.setFont (juce::Font (11.0f));
     g.drawText ("LAST " + juce::String ((int) steps.size()) + " STEPS, OLDEST LEFT", caption, juce::Justification::centredLeft);
 
     // Three lanes: timing, pitch and velocity of each recent step
@@ -87,7 +87,7 @@ void LerpPreview::paint (juce::Graphics& g)
         g.fillRoundedRectangle (plot, 4.0f);
 
         g.setColour (Palette::textDim.withAlpha (0.6f));
-        g.setFont (juce::Font (9.0f));
+        g.setFont (juce::Font (11.0f));
         g.drawText (laneLabels[lane], laneArea.withWidth (laneLabelWidth - 8.0f), juce::Justification::centredLeft);
 
         if (lane == 0)

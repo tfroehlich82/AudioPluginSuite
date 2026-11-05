@@ -173,12 +173,12 @@ void LerpCurveEditor::paint (juce::Graphics& g)
     }
 
     g.setColour (Palette::text);
-    g.setFont (juce::Font (11.0f, juce::Font::bold));
+    g.setFont (juce::Font (14.0f, juce::Font::bold));
     g.drawText (readout, area.reduced (8.0f, 4.0f), juce::Justification::topLeft);
 
     // Axis labels: the drift scale on the left (rotated), the chaos scale underneath
     g.setColour (Palette::textDim);
-    g.setFont (juce::Font (9.0f));
+    g.setFont (juce::Font (11.0f));
     g.drawText ("1", juce::Rectangle<float> (bounds.getX() + 4.0f, area.getY() - 4.0f, 14.0f, 12.0f), juce::Justification::centredRight);
     g.drawText ("0", juce::Rectangle<float> (bounds.getX() + 4.0f, area.getBottom() - 8.0f, 14.0f, 12.0f), juce::Justification::centredRight);
 

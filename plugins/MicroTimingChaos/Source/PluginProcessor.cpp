@@ -248,7 +248,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout MicroTimingChaosProcessor::c
     params.push_back (std::make_unique<AudioParameterInt> (ParameterID { baseVelocityId, 1 }, "Velocity", 30, 127, 100));
 
     // Melody
-    params.push_back (std::make_unique<AudioParameterInt> (ParameterID { rootId, 1 }, "Root Note", 24, 72, 48));
+    params.push_back (std::make_unique<AudioParameterInt> (
+        ParameterID { rootId, 1 }, "Root Note", 24, 72, 48,
+        AudioParameterIntAttributes().withStringFromValueFunction (
+            [] (int value, int) { return MidiMessage::getMidiNoteName (value, true, true, 3) + " (" + String (value) + ")"; })));
     params.push_back (std::make_unique<AudioParameterChoice> (
         ParameterID { scaleId, 1 }, "Scale",
         StringArray { "Chromatic", "Major", "Minor", "Minor Pentatonic", "Dorian", "Whole Tone" }, 2));
@@ -280,7 +283,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout MicroTimingChaosProcessor::c
         ParameterID { speedId, 1 }, "Speed", NormalisableRange<float> (0.5f, 2.0f, 0.01f), 1.0f));
 
     // LFO 1 and LFO 2
-    const StringArray lfoShapes { "Sine", "Triangle", "Saw", "Square", "Sample & Hold" };
+    const StringArray lfoShapes { "Sine", "Triangle", "Saw", "Square", "Sample & Hold", "Random", "Noise" };
     const StringArray divisions { "4 bars", "2 bars", "1 bar", "1/2", "1/4", "1/8", "1/16" };
 
     params.push_back (std::make_unique<AudioParameterFloat> (
@@ -592,7 +595,7 @@ void MicroTimingChaosProcessor::scheduleStep (std::int64_t stepIndex, double ste
     const int patternIndex = (int) (((stepIndex % lengthValue) + lengthValue) % lengthValue);
     const auto seedValue = (std::uint32_t) juce::roundToInt (modulatedValue (ModTarget::Seed, seed->load(), offsets));
     const float densityValue = modulatedValue (ModTarget::Density, density->load(), offsets) / 100.0f;
-    const float effectiveDensity = densityValue > 0.0f ? log1p (densityValue * 0.99f) / log1p (0.99f) : 0.0f;
+    const float effectiveDensity = densityCurve (densityValue);
     const double stepLength = stepBeats (juce::roundToInt (rate->load()));
 
     const float speedValue = modulatedValue (ModTarget::Speed, speed->load(), offsets);

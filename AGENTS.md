@@ -60,7 +60,7 @@ plugins/MicroTimingChaos/         Additional files:
   Source/LerpCurveEditor.{h,cpp}  The 5-point curve editor (Curve tab)
   Source/LerpPreview.{h,cpp}      The live drift preview (Preview tab)
   Source/LfoScope.{h,cpp}         One cycle of an LFO shape, with a dot at its current position
-  Source/ModulationPanel.{h,cpp}  The two LFO strips and the four routing slots (bottom of the left column)
+  Source/ModulationPanel.{h,cpp}  The two LFO strips and the six routing slots (bottom of the left column)
   Resources/icons/*.svg           BPM Sync icons, embedded in the binary
   Resources/textures/*.png        4K textures, embedded and scaled down at load
   generate_texture.py, make_png.py  Scripts that produced the textures (owner's tools)
@@ -143,7 +143,7 @@ Latency reported: 2048 samples (`setLatencySamples`). Tail length: 0.
 
 Latency reported: the oversampler's integer latency, computed in `prepareToPlay`. The dry path is delayed by the same amount. Tail length: 0.
 
-### 4.3 Micro-Timing Chaos Sequencer (40 parameters)
+### 4.3 Micro-Timing Chaos Sequencer (46 parameters)
 
 | ID | Name | Range | Default | Notes |
 |---|---|---|---|---|
@@ -168,12 +168,12 @@ Latency reported: the oversampler's integer latency, computed in `prepareToPlay`
 | `sync` | Host Sync | off / on | off | |
 | `speed` | Speed | 0.5 – 2.0 | 1.0 | Attractor speed relative to the tempo |
 | `lfo1Rate` / `lfo2Rate` | LFO Rate | 0.02 – 20 Hz, log | 0.25 Hz | Used when that LFO's Sync is off. Disabled in the UI while synced |
-| `lfo1Shape` / `lfo2Shape` | LFO Shape | Sine, Triangle, Saw, Square, Sample & Hold | Sine | Index 0 to 4 |
+| `lfo1Shape` / `lfo2Shape` | LFO Shape | Sine, Triangle, Saw, Square, Sample & Hold, Random, Noise | Sine | Index 0 to 6 |
 | `lfo1Sync` / `lfo2Sync` | LFO Sync | off / on | off | Locks the LFO to musical time |
 | `lfo1Division` / `lfo2Division` | LFO Division | 4 bars, 2 bars, 1 bar, 1/2, 1/4, 1/8, 1/16 | 1/4 | Cycle length: 16, 8, 4, 2, 1, 0.5, 0.25 beats. Used while synced |
-| `mod1Source` … `mod4Source` | Mod Source | LFO 1, LFO 2 | LFO 1 | Which LFO drives the slot |
-| `mod1Target` … `mod4Target` | Mod Target | the 14 targets in section 4.4 | None | Index 0 to 14. Append-only, see 4.4 |
-| `mod1Amount` … `mod4Amount` | Mod Amount | −100 – +100 % | 0 % | Signed. 0 % leaves the slot idle |
+| `mod1Source` … `mod6Source` | Mod Source | LFO 1, LFO 2 | LFO 1 | Which LFO drives the slot |
+| `mod1Target` … `mod6Target` | Mod Target | the 14 targets in section 4.4 | None | Index 0 to 14. Append-only, see 4.4 |
+| `mod1Amount` … `mod6Amount` | Mod Amount | −100 – +100 % | 0 % | Signed. 0 % leaves the slot idle |
 
 The lerp curve is **not** a parameter. It is five points (x, y) stored as the `lerpCurve` property of the APVTS state (`"x,y;x,y;..."`, four decimals). `loadLerpCurveFromState()` reads it on construction and after `setStateInformation`. The first and last x are fixed at 0 and 1. The default is `y = log10(1 + 9x)`, sampled at x = 0, 0.25, 0.5, 0.75, 1.
 
@@ -183,7 +183,7 @@ Latency reported: 50 ms fixed (`maxTimingRangeMs`, 2400 samples at 48 kHz), rega
 
 ### 4.4 LFOs and modulation routing
 
-Two LFOs and four routing slots. A slot adds `amount × LFO value` to its target, in the target's normalised range (0 to 1 across the parameter's range, so log and bipolar ranges behave the same). The result is clamped to [0, 1], and converted back with the parameter's own `convertFrom0to1`. With no slot aimed at a target, the base value is returned exactly, which is what keeps the committed output unchanged at the defaults.
+Two LFOs and six routing slots. A slot adds `amount × LFO value` to its target, in the target's normalised range (0 to 1 across the parameter's range, so log and bipolar ranges behave the same). The result is clamped to [0, 1], and converted back with the parameter's own `convertFrom0to1`. With no slot aimed at a target, the base value is returned exactly, which is what keeps the committed output unchanged at the defaults.
 
 Targets (`ModTarget` in `PluginProcessor.h`; index order is saved in sessions, so append only): 0 None, 1 Chaos, 2 Timing Range, 3 Velocity Chaos, 4 Lerp, 5 Lerp X Mult, 6 Lerp Y Mult, 7 Lerp Z Mult, 8 Density, 9 Gate, 10 Swing, 11 Velocity (rounded), 12 Speed, 13 Tempo (applies only while Host Sync is off), 14 Seed (changes the pattern and melody). Excluded on purpose: Rate, Length, Scale, Root, Octaves and Host Sync.
 
@@ -312,6 +312,9 @@ Mouse events in tests use the 15-argument `juce::MouseEvent` constructor of JUCE
 - **Modulation applies before the lerp curve**, so a modulated Chaos moves along the curve.
 - **The routing and LFO settings are plain APVTS parameters**, so they automate, save and restore like the rest.
 - **The LFO panel sits at the bottom of the left column, and the window is 980 px tall.** The plan's right-column option left the lerp curve about 100 px high.
+- **Interface typography.** Group titles are 15 pt bold in the accent colour, for every group. Knob captions are 13 pt bold, and value text 14 pt (look and feel `getLabelFont`). Knobs are capped at 110 x 150 px (`knobMaxWidth`, `knobMaxHeight`) and centred in their cells. The root note name is part of the parameter text (`C2 (48)`), so the separate note label is gone.
+- **Pattern display.** The sequencer view computes the pattern with the modulated Seed, Density and Timing Range, and `CoreDSP::Sequencer::densityCurve` (shared with the processor). Keep the two in step if either changes.
+- **LFO shapes.** Random is smooth value noise with two points per cycle. Noise is three layers of value noise (8, 16 and 32 points per cycle). Sample and hold is one level per cycle. The DSP tests check that Random and Noise are continuous and vary.
 - **Live control displays.** Each routable control shows `getModulatedValue()`: its base value moved by the offset published for its target. Offsets are published once per block, so displays follow LFOs in real time. Host automation shows through the base value. While the mouse is held on a control, the display is the user's value, and the modulation shows again on release. Tempo is shown unmodulated while Host Sync is on.
 - **Editor sizing (mockup layout).** The layout is designed at 1695 × 1380 (minimum width 1695, minimum height 1202). One gap, `groupGap` = 14 px, separates every pair of groups horizontally and vertically, and sets the outer margin. Left column 830 px (lerp, pattern, and melody + chaos side by side), right column 823 px (attractor, modulation, transport), and the pattern and modulation rows share a height of 299 px. The editor overrides `setScaleFactor` to multiply the host scale by 2/3, so the window shows at two thirds of the design size, about 1133 × 920 by default. The minimum width comes from the melody, chaos and transport row, which needs about 1700 px side by side. Fixed groups: lerp curve 830 × 310 (top left), pattern 830 × 292, modulation 797 × 299 (right), melody 398 × 167, chaos 418 × 167, transport 823 × 167. Only the attractor (top right, width to the window edge) and the step grid (full width, height to the window edge) resize.
 - **Spectral Drift preview:** the old panel was blank because, with no audio, the traces sat at the −120 dB floor. The fix adds a "Waiting for audio" state (shown until frames and input energy arrive) and frequency labels. A regression test checks that a 1 kHz tone reaches the snapshot at bin 43.
@@ -417,7 +420,7 @@ The original brief (`coding_agent_prompt.md`) is no longer in the repository. Th
 | Micro-Timing: `LookAndFeel` in `include/` (plan) | In the plugin root, next to the other source headers | The root is on the include path for the plugin and its tests |
 | Output spectrum on the display | Measured on finished output (one frame behind) | Shows the real overlap-add result |
 | Micro-Timing: LFO panel in the right column, window 940 px (plan, D9) | LFO panel at the bottom of the left column, window 980 px | The right column had no room for a lerp curve |
-| Micro-Timing: LFO and routing as APVTS parameters (plan) | 20 new parameters, `numControls` 40 | The plan's design; sessions save them |
+| Micro-Timing: LFO and routing as APVTS parameters (plan) | 26 new parameters, `numControls` 46 | The plan's design; sessions save them |
 
 ---
 
