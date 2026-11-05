@@ -42,6 +42,7 @@ public:
     static constexpr const char* timingRangeId = "timingRange";
     static constexpr const char* velocityChaosId = "velocityChaos";
 
+
     // Lerp Curve
     static constexpr const char* lerpId = "lerp";
     static constexpr const char* lerpXMultId = "lerpXMult";
@@ -64,13 +65,13 @@ public:
     static constexpr const char* lfo2DivisionId = "lfo2Division";
 
     // Modulation routing: four slots, each with a source, a target and a signed amount
-    static constexpr const char* modSourceIds[4] = { "mod1Source", "mod2Source", "mod3Source", "mod4Source" };
-    static constexpr const char* modTargetIds[4] = { "mod1Target", "mod2Target", "mod3Target", "mod4Target" };
-    static constexpr const char* modAmountIds[4] = { "mod1Amount", "mod2Amount", "mod3Amount", "mod4Amount" };
+    static constexpr const char* modSourceIds[6] = { "mod1Source", "mod2Source", "mod3Source", "mod4Source", "mod5Source", "mod6Source" };
+    static constexpr const char* modTargetIds[6] = { "mod1Target", "mod2Target", "mod3Target", "mod4Target", "mod5Target", "mod6Target" };
+    static constexpr const char* modAmountIds[6] = { "mod1Amount", "mod2Amount", "mod3Amount", "mod4Amount", "mod5Amount", "mod6Amount" };
 
-    static constexpr int numControls = 40;
+    static constexpr int numControls = 46;
     static constexpr int lfoCount = 2;
-    static constexpr int slotCount = 4;
+    static constexpr int slotCount = 6;
 
     /** Fixed seeds for the sample and hold shape, one per LFO, so the random sequence is the same every time. */
     static constexpr std::array<std::uint32_t, lfoCount> lfoSeeds { 0x51A5u, 0x7B3Du };

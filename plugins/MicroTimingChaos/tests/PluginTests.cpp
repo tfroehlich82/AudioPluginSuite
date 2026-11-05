@@ -101,7 +101,9 @@ namespace
                              Processor::modSourceIds[0], Processor::modTargetIds[0], Processor::modAmountIds[0],
                              Processor::modSourceIds[1], Processor::modTargetIds[1], Processor::modAmountIds[1],
                              Processor::modSourceIds[2], Processor::modTargetIds[2], Processor::modAmountIds[2],
-                             Processor::modSourceIds[3], Processor::modTargetIds[3], Processor::modAmountIds[3] },
+                             Processor::modSourceIds[3], Processor::modTargetIds[3], Processor::modAmountIds[3],
+                             Processor::modSourceIds[4], Processor::modTargetIds[4], Processor::modAmountIds[4],
+                             Processor::modSourceIds[5], Processor::modTargetIds[5], Processor::modAmountIds[5] },
                            Processor::numControls);
 
         checkRange (processor.apvts, Processor::rateId, 0.0f, 3.0f, 2.0f);
@@ -129,7 +131,7 @@ namespace
         for (const char* rateId : { Processor::lfo1RateId, Processor::lfo2RateId })
             checkRange (processor.apvts, rateId, 0.02f, 20.0f, 0.25f);
         for (const char* shapeId : { Processor::lfo1ShapeId, Processor::lfo2ShapeId })
-            checkRange (processor.apvts, shapeId, 0.0f, 4.0f, 0.0f);
+            checkRange (processor.apvts, shapeId, 0.0f, 6.0f, 0.0f);
         for (const char* syncId : { Processor::lfo1SyncId, Processor::lfo2SyncId })
             checkRange (processor.apvts, syncId, 0.0f, 1.0f, 0.0f);
         for (const char* divisionId : { Processor::lfo1DivisionId, Processor::lfo2DivisionId })

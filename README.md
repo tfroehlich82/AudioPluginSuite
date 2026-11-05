@@ -205,9 +205,9 @@ The Lerp Curve group has two tabs. **Curve** is the editor above, with a live ma
 | Control | Range | Default | Description |
 |---|---|---|---|
 | **LFO Rate** | 0.02 – 20 Hz | 0.25 Hz | Speed of each of the two LFOs. Disabled while that LFO is synced. |
-| **LFO Shape** | Sine, Triangle, Saw, Square, Sample & Hold | Sine | Waveform. Sample & Hold picks a new random level each cycle. |
+| **LFO Shape** | Sine, Triangle, Saw, Square, Sample & Hold, Random, Noise | Sine | Waveform. Sample & Hold picks a new random level each cycle. |
 | **LFO Sync** / **Division** | on / off, 4 bars to 1/16 | off, 1/4 | Locks an LFO to musical time, with the cycle length set by the division. |
-| **Mod Source / Target / Amount** | LFO 1 or 2; 14 targets; −100 to +100 % | None, 0 % | Four routing slots. A slot sends an LFO to a control, with a signed amount. Targets include Chaos, Timing Range, the lerp amounts, Density, Gate, Swing, Velocity, Speed, Tempo and Seed. |
+| **Mod Source / Target / Amount** | LFO 1 or 2; 14 targets; −100 to +100 % | None, 0 % | Six routing slots. A slot sends an LFO to a control, with a signed amount. Targets include Chaos, Timing Range, the lerp amounts, Density, Gate, Swing, Velocity, Speed, Tempo and Seed. |
 
 The full list, and the formulas, are in the [plugin README](plugins/MicroTimingChaos/README.md#lfo-and-modulation).
 

@@ -280,7 +280,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout MicroTimingChaosProcessor::c
         ParameterID { speedId, 1 }, "Speed", NormalisableRange<float> (0.5f, 2.0f, 0.01f), 1.0f));
 
     // LFO 1 and LFO 2
-    const StringArray lfoShapes { "Sine", "Triangle", "Saw", "Square", "Sample & Hold" };
+    const StringArray lfoShapes { "Sine", "Triangle", "Saw", "Square", "Sample & Hold", "Random", "Noise" };
     const StringArray divisions { "4 bars", "2 bars", "1 bar", "1/2", "1/4", "1/8", "1/16" };
 
     params.push_back (std::make_unique<AudioParameterFloat> (
