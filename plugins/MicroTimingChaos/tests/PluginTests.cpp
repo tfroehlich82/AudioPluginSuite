@@ -1,6 +1,7 @@
 // Plugin-level tests for Micro-Timing Chaos. Compiles the real processor and editor sources.
 
 #include "PluginTestUtils.h"
+#include "ModulationTestUtils.h"
 #include "PluginProcessor.h"
 
 #include <map>
@@ -762,34 +763,11 @@ namespace
     //==============================================================================
     // LFO and modulation
 
-    // Sets one LFO. The shape index is 0 Sine, 1 Triangle, 2 Saw, 3 Square, 4 Sample & Hold.
-    void setLfo (Processor& p, int lfo, float rateHz, float shape, bool synced, float division)
-    {
-        setParameter (p.apvts, lfo == 0 ? Processor::lfo1RateId : Processor::lfo2RateId, rateHz);
-        setParameter (p.apvts, lfo == 0 ? Processor::lfo1ShapeId : Processor::lfo2ShapeId, shape);
-        setParameter (p.apvts, lfo == 0 ? Processor::lfo1SyncId : Processor::lfo2SyncId, synced ? 1.0f : 0.0f);
-        setParameter (p.apvts, lfo == 0 ? Processor::lfo1DivisionId : Processor::lfo2DivisionId, division);
-    }
-
-    // Routes one slot: source 0 is LFO 1, 1 is LFO 2. Target indices follow Processor::ModTarget.
-    void setRoute (Processor& p, int slot, int source, int target, float amount)
-    {
-        setParameter (p.apvts, Processor::modSourceIds[slot], (float) source);
-        setParameter (p.apvts, Processor::modTargetIds[slot], (float) target);
-        setParameter (p.apvts, Processor::modAmountIds[slot], amount);
-    }
-
-    // Timing offset of every note-on from its grid position, in samples.
+    // The shared helpers (setLfo, setRoute) are in tests/common/ModulationTestUtils.h.
+    // Timing offset of every note-on from its 1/16 grid position, in samples.
     std::vector<int64_t> timingOffsets (const std::vector<Delivered>& events)
     {
-        std::vector<int64_t> offsets;
-        int64_t k = 0;
-
-        for (const auto& event : events)
-            if (event.message.isNoteOn())
-                offsets.push_back (event.time - (latency + k++ * sixteenthSamples));
-
-        return offsets;
+        return PluginTest::timingOffsets (events, latency, sixteenthSamples);
     }
 
     // A quiet 1/16 patch with timing chaos at full drift, so Timing Range is audible.

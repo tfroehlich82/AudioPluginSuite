@@ -25,10 +25,6 @@ set(MICRO_TIMING_CHAOS_SOURCES
     Source/LerpCurveEditor.h
     Source/LerpPreview.cpp
     Source/LerpPreview.h
-    Source/LfoScope.cpp
-    Source/LfoScope.h
-    Source/ModulationPanel.cpp
-    Source/ModulationPanel.h
     Source/MicroTimingChaosLookAndFeel.cpp
 )
 

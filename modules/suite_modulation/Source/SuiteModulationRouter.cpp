@@ -211,21 +211,24 @@ namespace SuiteModulation
         if (targetIndex <= 0 || targetIndex > targetCount)
             return 0.0f;
 
+        const auto& info = targets[targetIndex - 1];
         const float base = targetRaw[(size_t) targetIndex]->load();
         const float offset = publishedOffset[(size_t) targetIndex].load(std::memory_order_relaxed);
         auto* parameter = targetParams[(size_t) targetIndex];
 
-        if (offset == 0.0f || parameter == nullptr)
-            return base;
+        float result = base;
 
         // The sequencer ignores Tempo while the host syncs, so the display shows it unmoved too.
-        if (targets[targetIndex - 1].ignoredWhileHostSync && hostSync != nullptr && hostSync->load() > 0.5f)
-            return base;
+        const bool ignored = info.ignoredWhileHostSync && hostSync != nullptr && hostSync->load() > 0.5f;
 
-        const float normalised = parameter->convertTo0to1(base);
-        float result = parameter->convertFrom0to1(CoreDSP::Modulation::modulatedNormalised(normalised, offset));
+        if (offset != 0.0f && parameter != nullptr && ! ignored)
+        {
+            const float normalised = parameter->convertTo0to1(base);
+            result = parameter->convertFrom0to1(CoreDSP::Modulation::modulatedNormalised(normalised, offset));
+        }
 
-        if (targets[targetIndex - 1].wholeNumber)
+        // Whole-number controls show whole numbers, moved or not.
+        if (info.wholeNumber)
             result = std::round(result);
 
         return result;

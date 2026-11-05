@@ -10,9 +10,10 @@
 #include "PluginProcessor.h"
 #include "LerpCurveEditor.h"
 #include "LerpPreview.h"
-#include "ModulationPanel.h"
 #include "MicroTimingChaosLookAndFeel.h"
 #include "SuiteLookAndFeel.h"
+#include "SuiteModulationControls.h"
+#include "SuiteModulationPanel.h"
 #include "SuiteWidgets.h"
 
 /** The sequencer's step grid, showing the pattern, playhead, and recent notes. */
@@ -50,8 +51,10 @@ public:
 
 private:
     void timerCallback() override;
-    void showModulatedValues();
     void showHelp (const juce::MouseEvent&);
+
+    /** The colours of the LFO panel, taken from the Micro-Timing Chaos palette. */
+    static SuiteModulation::ModulationPanel::Style modulationStyle();
 
     /** Forwards mouse moves from every child to the editor, so the help line follows the pointer. */
     struct HelpTracker : public juce::MouseListener
@@ -105,7 +108,8 @@ juce::Label scaleCaption;
     LerpPreview lerpPreview;
 
     // Modulation: two LFOs and four routing slots, at the bottom of the left column
-    ModulationPanel modulation { processor };
+    SuiteModulation::ModulationPanel modulation { processor.getRouter(), modulationStyle() };
+    std::unique_ptr<SuiteModulation::ControlDisplay> controls;  // built in the constructor, once the sliders exist
     SuiteUI::LabelledSlider lerpSlider { "LERP", juce::Slider::RotaryVerticalDrag };
     SuiteUI::LabelledSlider lerpXMultSlider { "X MULT", juce::Slider::RotaryVerticalDrag };
     SuiteUI::LabelledSlider lerpYMultSlider { "Y MULT", juce::Slider::RotaryVerticalDrag };

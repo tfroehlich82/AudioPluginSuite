@@ -285,15 +285,16 @@ Plugin formats are chosen automatically: VST3 and Standalone everywhere, plus AU
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-Eight CTest entries run six test executables:
+Nine CTest entries run seven test executables:
 
 | Executable | Scope | Tests |
 |---|---|---|
-| `CoreDSPTests` | DSP primitives in `modules/core_dsp` | 28 |
+| `CoreDSPTests` | DSP primitives in `modules/core_dsp` | 29 |
 | `SuiteUITests` | Shared widgets and look and feel | 9 |
+| `SuiteModulationTests` | Shared LFOs, routing and the control display in `modules/suite_modulation` | 9 |
 | `SpectralDriftTests` | Spectral Drift processor and editor | 13 |
 | `DynamicSaturationTests` | Dynamic Saturation processor and editor | 10 |
-| `MicroTimingChaosTests` | Micro-Timing Chaos processor and editor | 33 |
+| `MicroTimingChaosTests` | Micro-Timing Chaos processor and editor | 34 |
 | `PluginHostTests` (×3) | Each built VST3 bundle, loaded through JUCE's own plugin host | 1 per plugin |
 
 The tests use `assert` with `NDEBUG` undefined, so they also check in Release builds. Without that, every check would be compiled out.
@@ -345,12 +346,19 @@ AudioPluginSuite/
 │       ├── tests/                  SuiteUITests.cpp
 │       ├── SuiteUI.cmake           suite_ui_add_to_target(): compiles the UI into each consumer
 │       └── CMakeLists.txt          SuiteUITests
+│   └── suite_modulation/           Shared LFOs, routing slots, LFO scope, modulation panel and control display
+│       ├── include/                SuiteModulationRouter.h, SuiteModulationScope.h, SuiteModulationPanel.h, SuiteModulationControls.h
+│       ├── Source/                 The matching .cpp files
+│       ├── tests/                  SuiteModulationTests.cpp
+│       ├── suite_modulation.cmake  suite_modulation_add_to_target(): compiles the module into each consumer
+│       └── CMakeLists.txt          SuiteModulationTests
 ├── plugins/
 │   ├── SpectralDrift/              Source/ (processor, editor), tests/PluginTests.cpp, CMakeLists.txt
 │   ├── DynamicSaturation/          Source/ (processor, editor), tests/PluginTests.cpp, CMakeLists.txt
-│   └── MicroTimingChaos/           Source/ (processor, editor, lerp curve, preview, LFO panel, look and feel), Resources/, tests/PluginTests.cpp, CMakeLists.txt
+│   └── MicroTimingChaos/           Source/ (processor, editor, lerp curve, preview, look and feel), Resources/, tests/PluginTests.cpp, CMakeLists.txt
 ├── tests/
 │   ├── common/PluginTestUtils.h    Shared helpers for the plugin tests
+│   ├── common/ModulationTestUtils.h  setLfo, setRoute and timingOffsets for any processor with the shared LFO parameters
 │   └── host/                       PluginHostTests: loads each built VST3 bundle
 ├── .github/workflows/
 │   ├── build.yml                   CI: build and test on Windows and macOS
@@ -386,6 +394,7 @@ Key decisions:
 - **Overlap-add normalisation** is measured from the actual window values, not assumed, so the reconstruction stays exact for any window shape.
 - **Oversampling** in Dynamic Saturation is JUCE's half-band FIR at 2×. The dry path is delayed by the same amount, so the mix stays aligned.
 - **SuiteUI is compiled into each consumer** rather than linked as a library. A library bundles the JUCE modules it uses, and those then clash with the same modules linked again by the plugin (duplicate symbols at link time).
+- **LFOs and routing are shared.** `SuiteModulation::Router` holds the two LFOs, the six routing slots and their parameters. A plugin supplies a table of the controls the routing can move, and the module does the rest. The module is compiled into each consumer like SuiteUI, and it needs SuiteUI in the same target.
 
 ### Adding a plugin
 

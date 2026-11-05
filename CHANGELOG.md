@@ -7,7 +7,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
-- `modules/suite_modulation`: a shared module with the two LFOs, six routing slots, the LFO scope and the modulation panel, for plugins to reuse. It is not used by any plugin yet, so Micro-Timing Chaos still runs its own copy. The routing math matches that copy.
+- `modules/suite_modulation`: a shared module with the two LFOs, six routing slots, the LFO scope, the modulation panel and the control display, for plugins to reuse. Its tests (`SuiteModulationTests`, 9) run as a new CTest entry.
+- `tests/common/ModulationTestUtils.h`: `setLfo`, `setRoute` and `timingOffsets` for any processor with the shared LFO parameters.
+- `modules/core_dsp/include/ModulationTiming.h`: the division table, `fractionalPart` and `cyclesFromSeconds`, with DSP tests.
 - Spectral Drift Shifter: fourteen controls in total. Drift Depth, Bin Spread, Stereo Phase, LFO Shape (sine, triangle, saw, square), Spectral Shift (±32 bins), Spectral Tilt (±2), Spectral Gate, Feedback Damping, Drift Start and Output Gain.
 - Dynamic Saturation Companion: thirteen controls. Attack, Release, Detect HPF, Stereo Link, Tube Bias, Fold, Tone and Envelope Curve are new.
 - Dynamic Saturation Companion now runs its shaper at 2× oversampling. The latency is reported to the host.
@@ -30,6 +32,7 @@ All notable changes to this project are documented here. The format follows
 - GNU GPL v3 licence (`LICENSE`).
 
 ### Changed
+- The LFO and control assignment code of Micro-Timing Chaos moved to the shared `suite_modulation` module. The LFO panel, the LFO scope and the routing now come from the module, and the plugin's own copies are gone. No change to sound, parameters, defaults or saved sessions. The editor renders byte-identically before and after.
 - Spectral Drift Shifter: the Feedback control runs from 0 to 20 %. Processing still caps the feedback at 12 %, so values above 12 % act as 12 %.
 - Spectral Drift Shifter: Bin Spread is 0 to 1 rad (was 0 to 0.5), Spectral Shift is ±32 bins (was ±16), and Spectral Tilt is ±2 (was ±1).
 - Spectral Drift Shifter: the preview says "Waiting for audio" until signal arrives, and has frequency labels. Before, a silent input left the panel blank with nothing to explain it.

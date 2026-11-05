@@ -157,6 +157,9 @@ public:
     /** Pattern length currently in use. */
     int getPatternLength() const noexcept { return patternLength.load (std::memory_order_relaxed); }
 
+    /** The LFOs and routing, for the editor's panel and control display. */
+    SuiteModulation::Router& getRouter() noexcept { return modulation; }
+
     //==============================================================================
     // Lerp curve: five points that map Chaos (x, 0 to 1) to drift (y, 0 to 1).
     // The first and last points keep x at 0 and 1. The points are saved with the session state.
