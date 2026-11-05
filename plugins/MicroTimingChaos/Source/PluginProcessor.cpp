@@ -248,7 +248,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout MicroTimingChaosProcessor::c
     params.push_back (std::make_unique<AudioParameterInt> (ParameterID { baseVelocityId, 1 }, "Velocity", 30, 127, 100));
 
     // Melody
-    params.push_back (std::make_unique<AudioParameterInt> (ParameterID { rootId, 1 }, "Root Note", 24, 72, 48));
+    params.push_back (std::make_unique<AudioParameterInt> (
+        ParameterID { rootId, 1 }, "Root Note", 24, 72, 48,
+        AudioParameterIntAttributes().withStringFromValueFunction (
+            [] (int value, int) { return MidiMessage::getMidiNoteName (value, true, true, 3) + " (" + String (value) + ")"; })));
     params.push_back (std::make_unique<AudioParameterChoice> (
         ParameterID { scaleId, 1 }, "Scale",
         StringArray { "Chromatic", "Major", "Minor", "Minor Pentatonic", "Dorian", "Whole Tone" }, 2));

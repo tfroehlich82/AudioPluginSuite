@@ -6,32 +6,49 @@ namespace
 
     // The layout is designed at this size. The window is shown at two thirds of it (see setScaleFactor).
     constexpr float designScale = 2.0f / 3.0f;
-    constexpr int groupTitleHeight = 18;
-    constexpr int titleBandHeight = 34;
-    constexpr int helpHeight = 22;
+    constexpr int groupTitleHeight = 26;
+    constexpr int titleBandHeight = 44;
+    constexpr int helpHeight = 26;
+    constexpr int readoutHeight = 24;
 
-    // One gap for everything: the outer margin, and the space between every pair of groups, horizontally and vertically.
+    // One gap for everything: the outer margin, and the space between every pair of groups.
     constexpr int groupGap = 14;
 
-    // Column widths. Left column: lerp, pattern, melody and chaos. Right column: attractor, modulation, transport.
+    // Column widths. Left: lerp, pattern, melody and chaos. Right: attractor, LFO and transport.
     constexpr int leftColumnWidth = 830;
     constexpr int rightColumnWidth = 823;
     constexpr int editorWidth = 3 * groupGap + leftColumnWidth + rightColumnWidth;   // 1695
 
-    // Row heights. The lerp group and the attractor share a row; pattern and modulation share the next.
+    // Rows: 1 lerp and attractor, 2 pattern and LFO, 3 melody, chaos and transport, 4 sequencer.
     constexpr int lerpGroupHeight = 310;
-    constexpr int readoutHeight = 22;
-    constexpr int attractorHeight = lerpGroupHeight - readoutHeight - 2;
-    constexpr int rowTwoHeight = 299;
-    constexpr int lowerGroupHeight = 167;
+    constexpr int rowTwoHeight = 340;
+    constexpr int lowerGroupHeight = 180;
     constexpr int gridMinHeight = 300;
     constexpr int editorHeight = 1380;
-    constexpr int minEditorHeight = titleBandHeight + 4 * groupGap + lerpGroupHeight + rowTwoHeight
-                                    + lowerGroupHeight + gridMinHeight + helpHeight + groupGap;
+    constexpr int minEditorHeight = titleBandHeight + 2 * groupGap + lerpGroupHeight + rowTwoHeight
+                                    + lowerGroupHeight + gridMinHeight + helpHeight + 4 * groupGap;
 
-    // Lower row inside the left column: melody and chaos fill its width exactly.
+    // Melody and chaos share the left column's lower row.
     constexpr int melodyGroupWidth = 398;
     constexpr int chaosGroupWidth = leftColumnWidth - melodyGroupWidth - groupGap;   // 418
+
+    // Knobs keep at most this size. They are centred in their cells, so large cells do not enlarge them.
+    constexpr int knobMaxWidth = 110;
+    constexpr int knobMaxHeight = 150;
+
+    /** Centres a knob in its cell, no larger than knobMaxWidth x knobMaxHeight. */
+    void placeKnob (juce::Component& knob, juce::Rectangle<int> cell)
+    {
+        knob.setBounds (cell.withSizeKeepingCentre (juce::jmin (cell.getWidth(), knobMaxWidth),
+                                                    juce::jmin (cell.getHeight(), knobMaxHeight)));
+    }
+
+    /** Emphasised caption above a knob: bold and centred. */
+    void emphasiseCaption (juce::Label& label)
+    {
+        label.setFont (juce::Font (13.0f, juce::Font::bold));
+        label.setJustificationType (juce::Justification::centred);
+    }
 
     /** Splits an area into a grid of cells, with a little room around each one. */
     std::vector<juce::Rectangle<int>> gridCells (juce::Rectangle<int> area, int count, int columns)
@@ -75,7 +92,7 @@ namespace
     void styleCaption (juce::Label& label, const juce::String& text)
     {
         label.setText (text, juce::dontSendNotification);
-        label.setFont (juce::Font (10.0f, juce::Font::bold));
+        label.setFont (juce::Font (13.0f, juce::Font::bold));
         label.setColour (juce::Label::textColourId, Palette::textDim);
         label.setJustificationType (juce::Justification::centred);
     }
@@ -125,7 +142,7 @@ void StepGridView::paint (juce::Graphics& g)
         }
 
         g.setColour (SuiteUI::Colours::textDim);
-        g.setFont (juce::Font (10.0f));
+        g.setFont (juce::Font (13.0f));
         g.drawText (juce::String (step + 1), column.withY (column.getBottom() - 14.0f).withHeight (12.0f),
                     juce::Justification::centred);
     }
@@ -161,26 +178,37 @@ MicroTimingChaosEditor::MicroTimingChaosEditor (MicroTimingChaosProcessor& p)
     helpTracker.onMove = [this] (const juce::MouseEvent& e) { showHelp (e); };
     addMouseListener (&helpTracker, true);
 
-    helpLabel.setFont (juce::Font (12.0f));
+    helpLabel.setFont (juce::Font (14.0f));
     helpLabel.setColour (juce::Label::textColourId, Palette::text);
     helpLabel.setText ("Hover a control to see what it does.", juce::dontSendNotification);
 
     readout.setJustificationType (juce::Justification::centredLeft);
     readout.setColour (juce::Label::textColourId, SuiteUI::Colours::text);
-    readout.setFont (juce::Font (13.0f));
+    readout.setFont (juce::Font (14.0f, juce::Font::bold));
 
-    hostTempoLabel.setFont (juce::Font (10.0f, juce::Font::bold));
+    hostTempoLabel.setFont (juce::Font (13.0f, juce::Font::bold));
     hostTempoLabel.setColour (juce::Label::textColourId, Palette::textDim);
     hostTempoLabel.setJustificationType (juce::Justification::centred);
 
     styleCaption (scaleCaption, "SCALE");
+
+    // Knob captions: all the same size and weight
+    for (auto* caption : { &lengthSlider.label, &densitySlider.label, &seedSlider.label, &gateSlider.label,
+                           &swingSlider.label, &velocitySlider.label, &rootSlider.label, &octavesSlider.label,
+                           &chaosSlider.label, &timingRangeSlider.label, &velocityChaosSlider.label,
+                           &lerpSlider.label, &lerpXMultSlider.label, &lerpYMultSlider.label, &lerpZMultSlider.label,
+                           &tempoSlider.label, &speedSlider.label })
+        emphasiseCaption (*caption);
+
+    rateSelector.setFontHeight (15.0f);
+    lerpViewSelector.setFontHeight (15.0f);
 
     for (auto* component : { static_cast<juce::Component*> (&helpLabel), static_cast<juce::Component*> (&attractor),
                               static_cast<juce::Component*> (&readout), static_cast<juce::Component*> (&grid),
                               static_cast<juce::Component*> (&lengthSlider), static_cast<juce::Component*> (&densitySlider),
                               static_cast<juce::Component*> (&seedSlider), static_cast<juce::Component*> (&gateSlider),
                               static_cast<juce::Component*> (&swingSlider), static_cast<juce::Component*> (&velocitySlider),
-                              static_cast<juce::Component*> (&rootSlider), static_cast<juce::Component*> (&rootNoteLabel), static_cast<juce::Component*> (&octavesSlider),
+                              static_cast<juce::Component*> (&rootSlider), static_cast<juce::Component*> (&octavesSlider),
                               static_cast<juce::Component*> (&scaleCaption), static_cast<juce::Component*> (&scaleBox),
                               static_cast<juce::Component*> (&chaosSlider), static_cast<juce::Component*> (&timingRangeSlider),
                               static_cast<juce::Component*> (&velocityChaosSlider),
@@ -320,16 +348,16 @@ void MicroTimingChaosEditor::paint (juce::Graphics& g)
 
     // Title band: a flat background, so the grid texture does not run through the title
     g.setColour (Palette::background);
-    g.fillRect (0, 0, getWidth(), 42);
+    g.fillRect (0, 0, getWidth(), titleBandHeight);
 
-    const auto header = getLocalBounds().reduced (16, 0).removeFromTop (30).toFloat();
+    const auto header = getLocalBounds().reduced (groupGap, 0).removeFromTop (titleBandHeight - 8).toFloat();
 
     g.setColour (lookAndFeel.getAccent());
-    g.setFont (juce::Font (20.0f, juce::Font::bold));
+    g.setFont (juce::Font (26.0f, juce::Font::bold));
     g.drawText ("MICRO-TIMING CHAOS", header, juce::Justification::centredLeft);
 
     // Axis legend, right-aligned: X drives timing, Y pitch and gate, Z velocity
-    const juce::Font legendFont (11.0f);
+    const juce::Font legendFont (14.0f);
     const struct { juce::String text; juce::Colour colour; } legend[] = {
         { "X  timing", Palette::timing },
         { "Y  pitch & gate", Palette::pitch },
@@ -347,6 +375,7 @@ void MicroTimingChaosEditor::paint (juce::Graphics& g)
         right -= width + 14.0f;
     }
 
+    // Every group title has the same colour and size.
     for (const auto& group : groups)
     {
         const auto bounds = group.bounds.toFloat();
@@ -356,8 +385,8 @@ void MicroTimingChaosEditor::paint (juce::Graphics& g)
         g.setColour (Palette::track);
         g.drawRoundedRectangle (bounds, 8.0f, 1.0f);
 
-        g.setColour (group.title == "LERP CURVE" ? lookAndFeel.getAccent() : Palette::textDim);
-        g.setFont (juce::Font (10.0f, juce::Font::bold));
+        g.setColour (lookAndFeel.getAccent());
+        g.setFont (juce::Font (15.0f, juce::Font::bold));
         g.drawText (group.title, group.bounds.withHeight (groupTitleHeight).translated (0, 4).reduced (12, 0),
                     juce::Justification::centredLeft);
     }
@@ -377,16 +406,18 @@ void MicroTimingChaosEditor::resized()
     const int right = content.getRight();
     const int rightX = right - rightColumnWidth;
 
-    // Row 1: lerp curve on the left; the attractor and its readout fill the right column's width.
+    // Row 1: lerp curve on the left, attractor visualisation on the right.
     const juce::Rectangle<int> lerpGroup (x0, y0, leftColumnWidth, lerpGroupHeight);
-    const int attractorX = lerpGroup.getRight() + groupGap;
-    attractor.setBounds (attractorX, y0, right - attractorX, attractorHeight);
-    readout.setBounds (attractorX, y0 + attractorHeight + 2, right - attractorX, readoutHeight);
+    const juce::Rectangle<int> attractorGroup (rightX, y0, rightColumnWidth, lerpGroupHeight);
 
-    // Row 2: pattern on the left, modulation on the right, both the same height.
+    auto attractorInner = innerOf (attractorGroup);
+    readout.setBounds (attractorInner.removeFromBottom (readoutHeight));
+    attractor.setBounds (attractorInner);
+
+    // Row 2: pattern on the left, LFO on the right, both the same height.
     const int row2Y = lerpGroup.getBottom() + groupGap;
     const juce::Rectangle<int> patternGroup (x0, row2Y, leftColumnWidth, rowTwoHeight);
-    const juce::Rectangle<int> modulationGroup (rightX, row2Y, rightColumnWidth, rowTwoHeight);
+    const juce::Rectangle<int> lfoGroup (rightX, row2Y, rightColumnWidth, rowTwoHeight);
 
     // Row 3: melody and chaos on the left, transport on the right.
     const int row3Y = patternGroup.getBottom() + groupGap;
@@ -394,69 +425,70 @@ void MicroTimingChaosEditor::resized()
     const juce::Rectangle<int> chaosGroup (melodyGroup.getRight() + groupGap, row3Y, chaosGroupWidth, lowerGroupHeight);
     const juce::Rectangle<int> transportGroup (rightX, row3Y, rightColumnWidth, lowerGroupHeight);
 
-    // Row 4: the step grid across the full width, taking all remaining height.
+    // Row 4: the sequencer across the full width, taking all remaining height.
     const int row4Y = transportGroup.getBottom() + groupGap;
-    grid.setBounds (x0, row4Y, content.getWidth(), content.getBottom() - row4Y);
+    const juce::Rectangle<int> sequencerGroup (x0, row4Y, content.getWidth(), content.getBottom() - row4Y);
 
     groups.push_back ({ "LERP CURVE", lerpGroup });
+    groups.push_back ({ "ATTRACTOR VISUALIZATION", attractorGroup });
     groups.push_back ({ "PATTERN", patternGroup });
-    groups.push_back ({ "MODULATION", modulationGroup });
+    groups.push_back ({ "LFO", lfoGroup });
     groups.push_back ({ "MELODY", melodyGroup });
     groups.push_back ({ "CHAOS", chaosGroup });
     groups.push_back ({ "TRANSPORT", transportGroup });
+    groups.push_back ({ "SEQUENCER", sequencerGroup });
 
-    modulation.setBounds (innerOf (modulationGroup));
+    modulation.setBounds (innerOf (lfoGroup));
+    grid.setBounds (innerOf (sequencerGroup));
 
     // Pattern: 3 x 2
     const auto patternCells = gridCells (innerOf (patternGroup), 6, 3);
-    lengthSlider.setBounds (patternCells[0]);
-    densitySlider.setBounds (patternCells[1]);
-    seedSlider.setBounds (patternCells[2]);
-    gateSlider.setBounds (patternCells[3]);
-    swingSlider.setBounds (patternCells[4]);
-    velocitySlider.setBounds (patternCells[5]);
+    placeKnob (lengthSlider, patternCells[0]);
+    placeKnob (densitySlider, patternCells[1]);
+    placeKnob (seedSlider, patternCells[2]);
+    placeKnob (gateSlider, patternCells[3]);
+    placeKnob (swingSlider, patternCells[4]);
+    placeKnob (velocitySlider, patternCells[5]);
 
-    // Melody: root (with its note name under it), octaves, and the scale box
+    // Melody: root with its note name under it, octaves, and the scale box
     const auto melodyCells = gridCells (innerOf (melodyGroup), 3, 3);
-    auto rootCell = melodyCells[0];
-    rootNoteLabel.setBounds (rootCell.removeFromBottom (18));
-    rootSlider.setBounds (rootCell);
-    octavesSlider.setBounds (melodyCells[1]);
+    placeKnob (rootSlider, melodyCells[0]);
+    placeKnob (octavesSlider, melodyCells[1]);
     auto scaleCell = melodyCells[2];
-    scaleCaption.setBounds (scaleCell.removeFromTop (16));
-    scaleBox.setBounds (scaleCell.withSizeKeepingCentre (scaleCell.getWidth(), 28));
+    scaleCaption.setBounds (scaleCell.removeFromTop (18));
+    scaleBox.setBounds (scaleCell.withSizeKeepingCentre (scaleCell.getWidth(), 30));
 
     // Chaos
     const auto chaosCells = gridCells (innerOf (chaosGroup), 3, 3);
-    chaosSlider.setBounds (chaosCells[0]);
-    timingRangeSlider.setBounds (chaosCells[1]);
-    velocityChaosSlider.setBounds (chaosCells[2]);
+    placeKnob (chaosSlider, chaosCells[0]);
+    placeKnob (timingRangeSlider, chaosCells[1]);
+    placeKnob (velocityChaosSlider, chaosCells[2]);
 
-    // Lerp curve: the tabbed view on the left, the four knobs on the right. The knobs fill their block.
+    // Lerp curve: the tabbed view on the left, the four knobs on the right
     auto lerpInner = innerOf (lerpGroup);
-    auto lerpKnobs = lerpInner.removeFromRight (juce::roundToInt ((float) lerpInner.getWidth() * 0.36f));
-    lerpViewSelector.setBounds (lerpInner.removeFromTop (26).withWidth (210));
-    lerpInner.removeFromTop (6);
+    auto lerpKnobs = lerpInner.removeFromRight (juce::roundToInt ((float) lerpInner.getWidth() * 0.40f));
+    lerpViewSelector.setBounds (lerpInner.removeFromTop (34).withWidth (240));
+    lerpInner.removeFromTop (8);
     curveEditor.setBounds (lerpInner);
     lerpPreview.setBounds (lerpInner);
 
     const auto lerpCells = gridCells (lerpKnobs, 4, 2);
-    lerpSlider.setBounds (lerpCells[0]);
-    lerpXMultSlider.setBounds (lerpCells[1]);
-    lerpYMultSlider.setBounds (lerpCells[2]);
-    lerpZMultSlider.setBounds (lerpCells[3]);
+    placeKnob (lerpSlider, lerpCells[0]);
+    placeKnob (lerpXMultSlider, lerpCells[1]);
+    placeKnob (lerpYMultSlider, lerpCells[2]);
+    placeKnob (lerpZMultSlider, lerpCells[3]);
 
-    // Transport: tempo, speed, rate, and the BPM Sync button with the host tempo under it
-    const auto transportCells = gridCells (innerOf (transportGroup), 4, 4);
-    tempoSlider.setBounds (transportCells[0]);
-    speedSlider.setBounds (transportCells[1]);
+    // Transport: tempo and speed knobs on the left; on the right, the rate selector, then BPM Sync with its host tempo
+    auto transportInner = innerOf (transportGroup);
+    auto knobArea = transportInner.removeFromLeft (300);
+    placeKnob (tempoSlider, knobArea.removeFromLeft (150));
+    placeKnob (speedSlider, knobArea);
+    transportInner.removeFromLeft (groupGap);
 
-    auto rateCell = transportCells[2];
-    rateSelector.setBounds (rateCell.withSizeKeepingCentre (rateCell.getWidth(), 30));
-
-    auto syncCell = transportCells[3];
-    syncButton.setBounds (syncCell.removeFromTop (30).withSizeKeepingCentre (syncCell.getWidth() - 6, 30));
-    hostTempoLabel.setBounds (syncCell.removeFromTop (18));
+    rateSelector.setBounds (transportInner.removeFromTop (38).withSizeKeepingCentre (400, 38));
+    transportInner.removeFromTop (groupGap);
+    syncButton.setBounds (transportInner.removeFromTop (38).withSizeKeepingCentre (280, 38));
+    hostTempoLabel.setBounds (transportInner.removeFromTop (24).withSizeKeepingCentre (280, 24));
 }
 
 void MicroTimingChaosEditor::showModulatedValues()
@@ -542,5 +574,4 @@ void MicroTimingChaosEditor::timerCallback()
     }
 
     // Middle C is C3 here, so MIDI 60 reads C3.
-    rootNoteLabel.setText (juce::MidiMessage::getMidiNoteName (rootValue, true, true, 3), juce::dontSendNotification);
 }

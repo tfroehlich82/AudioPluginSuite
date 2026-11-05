@@ -45,6 +45,11 @@ namespace MicroTimingChaos
 
         void positionComboBoxText (juce::ComboBox&, juce::Label&) override;
 
+        /** Larger text throughout: labels, value boxes, combo boxes and menus. */
+        juce::Font getLabelFont (juce::Label&) override;
+        juce::Font getComboBoxFont (juce::ComboBox&) override;
+        juce::Font getPopupMenuFont() override;
+
     private:
         juce::Colour accent;
     };

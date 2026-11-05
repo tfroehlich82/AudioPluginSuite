@@ -6,12 +6,12 @@ namespace
 {
     namespace Palette = MicroTimingChaos::Palette;
 
-    constexpr int lfoKnobWidth = 84;
-    constexpr int scopeHeight = 38;
-    constexpr int controlHeight = 20;
-    constexpr int lfoBlockHeight = 96;
-    constexpr int headingHeight = 14;
-    constexpr int slotRowHeight = 22;
+    constexpr int lfoKnobWidth = 110;
+    constexpr int scopeHeight = 46;
+    constexpr int controlHeight = 26;
+    constexpr int lfoBlockHeight = 120;
+    constexpr int headingHeight = 16;
+    constexpr int slotRowHeight = 26;
 
     const juce::StringArray shapeNames { "Sine", "Triangle", "Saw", "Square", "Sample & Hold", "Random", "Noise" };
     const juce::StringArray divisionNames { "4 bars", "2 bars", "1 bar", "1/2", "1/4", "1/8", "1/16" };
@@ -67,7 +67,7 @@ struct ModulationPanel::SlotRow
     {
         source.addItemList (sourceNames, 1);
         target.addItemList (MicroTimingChaosProcessor::modTargetNames(), 1);
-        amount.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 18);
+        amount.setTextBoxStyle (juce::Slider::TextBoxRight, false, 72, 22);
         amount.setTextValueSuffix (" %");
         amount.setNumDecimalPlacesToDisplay (0);
 
@@ -166,7 +166,7 @@ void ModulationPanel::resized()
         cell.removeFromTop (4);
 
         auto row = cell.removeFromTop (controlHeight);
-        lfo.sync.setBounds (row.removeFromLeft (row.getWidth() / 3));
+        lfo.sync.setBounds (row.removeFromLeft (row.getWidth() / 2));
         row.removeFromLeft (4);
         lfo.division.setBounds (row);
     }
@@ -199,7 +199,7 @@ void ModulationPanel::paint (juce::Graphics& g)
     const int targetWidth = juce::roundToInt ((float) getWidth() * 0.40f);
 
     g.setColour (Palette::textDim);
-    g.setFont (juce::Font (9.0f, juce::Font::bold));
+    g.setFont (juce::Font (12.0f, juce::Font::bold));
 
     g.drawText ("SOURCE", juce::Rectangle<int> (0, headingY, sourceWidth, headingHeight), juce::Justification::centredLeft);
     g.drawText ("TARGET", juce::Rectangle<int> (sourceWidth + 6, headingY, targetWidth, headingHeight), juce::Justification::centredLeft);
