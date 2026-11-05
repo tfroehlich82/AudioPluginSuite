@@ -76,6 +76,7 @@ if(SUITE_BUILD_TESTS)
     )
 
     suite_ui_add_to_target(MicroTimingChaosTests)
+    suite_modulation_add_to_target(MicroTimingChaosTests)
 
     # The editor tests pump the message loop so timers fire.
     target_compile_definitions(MicroTimingChaosTests PRIVATE JUCE_MODAL_LOOPS_PERMITTED=1)

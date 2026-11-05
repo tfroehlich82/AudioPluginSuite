@@ -1,75 +1,10 @@
-// Prints every MIDI event with its time to stderr, for baseline recording.
-void printMidiEventLog(Processor& processor, int64_t& globalSample, int blocks,
-                        const juce::MidiBuffer& input = {})
-{
-    // Temporary logging setup
-    std::fprintf(stderr, "\n--- MIDI LOG START ---\n");
+// Plugin-level tests for Micro-Timing Chaos. Compiles the real processor and editor sources.
 
-    // Run the processor and log
-    auto events = run(processor, globalSample, blocks, input);
+#include "PluginTestUtils.h"
+#include "PluginProcessor.h"
 
-    for (const auto& event : events)
-    {
-        // Format: Time (sample_offset): Event Type: Data
-        // For NoteOn: Time: NoteOn: NoteNumber, Velocity
-        // For NoteOff: Time: NoteOff: NoteNumber
-        if (event.message.isNoteOn())
-        {
-            std::fprintf(stderr, "%lld: NoteOn: %d, %d\n",
-                         event.time, event.message.getNoteNumber(),
-                         event.message.getVelocity());
-        }
-        else if (event.message.isNoteOff())
-        {
-            std::fprintf(stderr, "%lld: NoteOff: %d\n",
-                         event.time, event.message.getNoteNumber());
-        }
-    }
-    std::fprintf(stderr, "--- MIDI LOG END ---\n\n");
-}
-
-// Baseline 1: Default routing (No modulation active).
-void testMidiEventLog_DefaultRouting()
-{
-    Processor processor;
-    setPlain(processor);
-    setParameter(processor.apvts, Processor::chaosId, 100.0f);
-    setParameter(processor.apvts, Processor::rateId, 2.0f);
-    setParameter(processor.apvts, Processor::timingRangeId, 25.0f);
-    setParameter(processor.apvts, Processor::lerpId, 80.0f);
-    processor.prepareToPlay(sampleRate, blockSize);
-
-    int64_t sample = 0;
-
-    std::fprintf(stderr, "\n--- BASELINE 1: Default Routing ---\n");
-    printMidiEventLog(processor, sample, 1500);
-
-    // Temporary test function: must be removed after data collection.
-}
-
-// Baseline 2: LFO 1 routed to Timing Range at 50% modulation.
-void testMidiEventLog_RoutedTiming()
-{
-    Processor processor;
-    setPlain(processor);
-    setParameter(processor.apvts, Processor::chaosId, 100.0f);
-    setParameter(processor.apvts, Processor::rateId, 2.0f);
-    setParameter(processor.apvts, Processor::timingRangeId, 25.0f);
-    setParameter(processor.apvts, Processor::lerpId, 80.0f);
-
-    // Add LFO 1 and route it to Timing Range (Target Index 2) at 50%
-    setLfo(processor, 0, 1.0f, 0.0f, false, 4.0f); // Rate 1 Hz, Sine
-    setRoute(processor, 0, 0, 2, 50.0f);           // LFO 1 -> Timing Range
-
-    processor.prepareToPlay(sampleRate, blockSize);
-
-    int64_t sample = 0;
-
-    std::fprintf(stderr, "\n--- BASELINE 2: LFO -> Timing Range (50%%) ---\n");
-    printMidiEventLog(processor, sample, 1500);
-
-    // Temporary test function: must be removed after data collection.
-}
+#include <map>
+#include <set>
 
 namespace
 {
@@ -868,32 +803,8 @@ namespace
         setParameter (p.apvts, Processor::lerpId, 100.0f);
     }
 
-    // Prints every MIDI event with its time to stderr, for baseline recording.
-    void printMidiEventLog (Processor& processor, int64_t& globalSample, int blocks, const juce::MidiBuffer& input = {})
-    {
-        // Temporary logging setup
-        std::fprintf (stderr, "\n--- MIDI LOG START ---\n");
-        
-        // Run the processor and log
-        auto events = run (processor, globalSample, blocks, input);
-        
-        for (const auto& event : events)
-        {
-            // Format: Time (sample_offset): Event Type: Data
-            // For NoteOn: Time: NoteOn: NoteNumber, Velocity
-            // For NoteOff: Time: NoteOff: NoteNumber
-            if (event.message.isNoteOn())
-            {
-                std::fprintf (stderr, "%lld: NoteOn: %d, %d\n", event.time, event.message.getNoteNumber(), event.message.getVelocity());
-            }
-            else if (event.message.isNoteOff())
-            {
-                std::fprintf (stderr, "%lld: NoteOff: %d\n", event.time, event.message.getNoteNumber());
-            }
-        }
-        std::fprintf (stderr, "--- MIDI LOG END ---\n\n");
-    }
-
+    // The unmodulated event log from the committed code. Chaos 100, 1/16, Timing Range 25 ms, Lerp 80 %,
+    // 1500 blocks. With every LFO and routing parameter at its default, the output must match it exactly.
     void testNoModulationIsIdentical()
     {
         struct Expected { int64_t time; bool noteOn; int note; int velocity; };
@@ -984,48 +895,8 @@ namespace
             assert (events[i].message.getVelocity() == expected[i].velocity);
         }
 
-    // Baseline 1: Default routing (No modulation active).
-    void testMidiEventLog_DefaultRouting()
-    {
-        Processor processor;
-        setPlain (processor);
-        setParameter (processor.apvts, Processor::chaosId, 100.0f);
-        setParameter (processor.apvts, Processor::rateId, 2.0f);
-        setParameter (processor.apvts, Processor::timingRangeId, 25.0f);
-        setParameter (processor.apvts, Processor::lerpId, 80.0f);
-        processor.prepareToPlay (sampleRate, blockSize);
-        
-        int64_t sample = 0;
-        
-        std::fprintf (stderr, "\n--- BASELINE 1: Default Routing ---\n");
-        printMidiEventLog (processor, sample, 1500);
-        
-        // Temporary test function: must be removed after data collection.
+        pass ("testNoModulationIsIdentical");
     }
-    // Baseline 2: LFO 1 routed to Timing Range at 50% modulation.
-    void testMidiEventLog_RoutedTiming()
-    {
-        Processor processor;
-        setPlain (processor);
-        setParameter (processor.apvts, Processor::chaosId, 100.0f);
-        setParameter (processor.apvts, Processor::rateId, 2.0f);
-        setParameter (processor.apvts, Processor::timingRangeId, 25.0f);
-        setParameter (processor.apvts, Processor::lerpId, 80.0f);
-        
-        // Add LFO 1 and route it to Timing Range (Target Index 2) at 50%
-        setLfo (processor, 0, 1.0f, 0.0f, false, 4.0f); // Rate 1 Hz, Sine
-        setRoute (processor, 0, 0, 2, 50.0f);           // LFO 1 -> Timing Range
-        
-        processor.prepareToPlay (sampleRate, blockSize);
-        
-        int64_t sample = 0;
-        
-        std::fprintf (stderr, "\n--- BASELINE 2: LFO -> Timing Range (50%%) ---\n");
-        printMidiEventLog (processor, sample, 1500);
-        
-        // Temporary test function: must be removed after data collection.
-    }
-
 
     // An LFO on Timing Range moves the timing. At Amount 0 the LFO has no effect at all.
     void testSineOnTimingRangeChangesOffsets()

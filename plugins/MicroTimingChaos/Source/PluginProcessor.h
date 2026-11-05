@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "CoreDSP.h"
+#include "SuiteModulationRouter.h"
 
 /**
     Micro-Timing Chaos.
@@ -209,19 +210,11 @@ public:
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-    using TargetOffsets = std::array<float, (size_t) ModTarget::count>;
-
-    /** Cycles elapsed for an LFO at a sample time (free) or a beat (synced), before the shape is applied. */
-    double lfoCyclesAt (int lfoIndex, double timeSamples, double beat) const;
-
-    /** Sums every routing slot into one offset per target, for a sample time and beat. */
-    TargetOffsets computeOffsets (double timeSamples, double beat) const;
-
     /** Applies an offset to a parameter's base value, in the parameter's own normalised range. Exact when the offset is zero. */
-    float modulatedValue (ModTarget target, float base, const TargetOffsets& offsets) const;
-
-    /** The routing target parameter for each ModTarget (nullptr for None). */
-    std::array<juce::RangedAudioParameter*, (size_t) ModTarget::count> targetParams {};
+    float modulatedValue (ModTarget target, float base, const SuiteModulation::Router::Offsets& offsets) const
+    {
+        return modulation.modulate ((int) target, base, offsets);
+    }
 
     void loadLerpCurveFromState();
     void storeLerpCurveToState();
@@ -294,19 +287,9 @@ private:
     std::atomic<float>* sync = nullptr;
     std::atomic<float>* speed = nullptr;
 
-    std::array<std::atomic<float>*, lfoCount> lfoRate {};
-    std::array<std::atomic<float>*, lfoCount> lfoShape {};
-    std::array<std::atomic<float>*, lfoCount> lfoSync {};
-    std::array<std::atomic<float>*, lfoCount> lfoDivision {};
-    std::array<std::atomic<float>*, slotCount> modSource {};
-    std::array<std::atomic<float>*, slotCount> modTarget {};
-    std::array<std::atomic<float>*, slotCount> modAmount {};
-
-    // LFO state. The free LFOs accumulate cycles across blocks, so changing the rate never jumps the phase.
-    std::array<double, lfoCount> lfoCycles {};
-    std::array<std::atomic<float>, lfoCount> lfoPublishedValue {};
-    std::array<std::atomic<float>, lfoCount> lfoPublishedPhase {};
-    std::array<std::atomic<float>, (size_t) ModTarget::count> targetOffsetPublished {};
+    // The two LFOs and the six routing slots, shared with the other plugins (modules/suite_modulation).
+    // Declared after apvts, which it reads from.
+    SuiteModulation::Router modulation;
 
     TrailSnapshot trail;
     std::array<LogSlot, logLength> log;
