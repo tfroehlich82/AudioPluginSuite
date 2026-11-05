@@ -11,6 +11,7 @@
 
 #include "ChaosEngine.h"
 #include "ModulationEngine.h"
+#include "ModulationTiming.h"
 #include "SaturationEngine.h"
 #include "SequencerEngine.h"
 #include "SpectralEngine.h"

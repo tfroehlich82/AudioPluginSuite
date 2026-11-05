@@ -8,9 +8,6 @@ namespace
 {
     constexpr int midiChannel = 1;
 
-    // Synced divisions, in beats per cycle. Index order matches the Division choice parameter.
-    constexpr std::array<double, 7> divisionBeats { 16.0, 8.0, 4.0, 2.0, 1.0, 0.5, 0.25 };
-
     /** Shows LFO rates with two decimals, such as "0.25 Hz". */
     juce::String formatHz (float value, int) { return juce::String (value, 2) + " Hz"; }
 
@@ -389,8 +386,10 @@ double MicroTimingChaosProcessor::lfoCyclesAt (int lfoIndex, double timeSamples,
 
     if (lfoSync[index]->load() > 0.5f)
     {
-        const int division = std::clamp (juce::roundToInt (lfoDivision[index]->load()), 0, (int) divisionBeats.size() - 1);
-        return beat / divisionBeats[(size_t) division];
+        // Synced divisions, in beats per cycle. Index order matches the Division choice parameter.
+        const int division = std::clamp (juce::roundToInt (lfoDivision[index]->load()), 0,
+                                         (int) std::size (CoreDSP::Modulation::divisionBeats) - 1);
+        return beat / CoreDSP::Modulation::divisionBeats[(size_t) division];
     }
 
     // Free LFOs: the count at the start of this block, plus the time since then.

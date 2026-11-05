@@ -17,9 +17,6 @@ namespace SuiteModulation
         constexpr std::array<const char*, Router::slotCount> modTargetIds { "mod1Target", "mod2Target", "mod3Target", "mod4Target", "mod5Target", "mod6Target" };
         constexpr std::array<const char*, Router::slotCount> modAmountIds { "mod1Amount", "mod2Amount", "mod3Amount", "mod4Amount", "mod5Amount", "mod6Amount" };
 
-        // Cycle length in beats for each division choice: 4 bars, 2 bars, 1 bar, 1/2, 1/4, 1/8, 1/16
-        constexpr std::array<double, 7> divisionBeats { 16.0, 8.0, 4.0, 2.0, 1.0, 0.5, 0.25 };
-
         juce::NormalisableRange<float> logRange(float start, float end)
         {
             return { start, end,
@@ -127,8 +124,7 @@ namespace SuiteModulation
 
         if (lfoSync[index]->load() > 0.5f)
         {
-            const int division = clampedChoice(lfoDivision[index]->load(), (int) divisionBeats.size());
-            return beat / divisionBeats[(size_t) division];
+            return beat / CoreDSP::Modulation::divisionToBeats(clampedChoice(lfoDivision[index]->load(), 7));
         }
 
         // Free LFOs: the count at the start of the block, plus the time since then.
