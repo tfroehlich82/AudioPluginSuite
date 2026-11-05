@@ -117,47 +117,117 @@ void StepGridView::setState (int patternLength, int playhead, float timingRangeM
 
 void StepGridView::paint (juce::Graphics& g)
 {
-    const auto area = getLocalBounds().toFloat().reduced (4.0f);
-    const float columnWidth = area.getWidth() / (float) length;
-    const float centreY = area.getCentreY();
+    const auto bounds = getLocalBounds().toFloat();
+    constexpr float axisWidth = 58.0f;
+    constexpr float numberHeight = 26.0f;
 
-    g.setColour (SuiteUI::Colours::panel);
-    g.fillRoundedRectangle (area, 6.0f);
+    // Panel: a soft vertical gradient
+    g.setGradientFill (juce::ColourGradient (Palette::panelLight, 0.0f, bounds.getY(),
+                                             Palette::panel, 0.0f, bounds.getBottom(), false));
+    g.fillRoundedRectangle (bounds, 8.0f);
 
-    g.setColour (SuiteUI::Colours::track);
-    g.drawHorizontalLine ((int) centreY, area.getX(), area.getRight());
+    const auto plot = bounds.withTrimmedLeft (axisWidth).withTrimmedBottom (numberHeight).reduced (8.0f, 10.0f);
+    const float columnWidth = plot.getWidth() / (float) juce::jmax (1, length);
+    const float halfHeight = plot.getHeight() * 0.5f;
+    const float range = juce::jmax (1.0f, rangeMs);
+    const float centreY = plot.getCentreY();
 
+    auto yFor = [=] (float offsetMs) { return centreY - juce::jlimit (-1.0f, 1.0f, offsetMs / range) * halfHeight; };
+
+    // Timing guides, with labels on the left: +range, 0 and -range
+    g.setFont (juce::Font (13.0f));
+    const float guides[] = { range, 0.0f, -range };
+    for (const float value : guides)
+    {
+        const float y = yFor (value);
+        g.setColour (value == 0.0f ? Palette::track.brighter (0.35f) : Palette::track.withAlpha (0.55f));
+        g.drawLine (plot.getX(), y, plot.getRight(), y, value == 0.0f ? 1.5f : 1.0f);
+
+        const juce::String text = value == 0.0f
+            ? juce::String ("0")
+            : juce::String (value > 0.0f ? "+" : "-") + juce::String (juce::roundToInt (std::abs (value))) + " ms";
+        g.setColour (Palette::textDim);
+        g.drawText (text, juce::Rectangle<float> (bounds.getX() + 4.0f, y - 10.0f, axisWidth - 8.0f, 20.0f),
+                    juce::Justification::centredRight);
+    }
+
+    // Steps: separators, the lit playhead column, the firing bars, and the step numbers
     for (int step = 0; step < length; ++step)
     {
-        const auto column = juce::Rectangle<float> (area.getX() + (float) step * columnWidth, area.getY(), columnWidth, area.getHeight()).reduced (3.0f);
+        const auto column = juce::Rectangle<float> (plot.getX() + (float) step * columnWidth, plot.getY(),
+                                                    columnWidth, plot.getHeight());
+        const bool isPlayhead = step == playheadStep;
         const bool fires = step < (int) firing.size() && firing[(size_t) step];
 
-        g.setColour (fires ? accent.withAlpha (0.18f) : SuiteUI::Colours::panelLight);
-        g.fillRoundedRectangle (column.withTrimmedBottom (column.getHeight() * 0.7f), 4.0f);
+        g.setColour (Palette::track.withAlpha (0.35f));
+        g.drawLine (column.getX(), plot.getY(), column.getX(), plot.getBottom(), 1.0f);
 
-        if (step == playheadStep)
+        if (isPlayhead)
         {
-            g.setColour (accent);
-            g.drawRoundedRectangle (column, 4.0f, 2.0f);
+            const auto lit = column.reduced (2.0f, 0.0f);
+            g.setGradientFill (juce::ColourGradient (accent.withAlpha (0.22f), lit.getCentreX(), plot.getY(),
+                                                     accent.withAlpha (0.02f), lit.getCentreX(), plot.getBottom(), false));
+            g.fillRoundedRectangle (lit, 6.0f);
+            g.setColour (accent.withAlpha (0.8f));
+            g.drawRoundedRectangle (lit, 6.0f, 2.0f);
         }
 
-        g.setColour (SuiteUI::Colours::textDim);
-        g.setFont (juce::Font (13.0f));
-        g.drawText (juce::String (step + 1), column.withY (column.getBottom() - 14.0f).withHeight (12.0f),
+        if (fires)
+        {
+            const auto body = column.reduced (columnWidth * 0.18f, 0.0f);
+            const float height = plot.getHeight() * 0.20f;
+            const juce::Rectangle<float> bar (body.getX(), plot.getBottom() - height, body.getWidth(), height);
+            g.setGradientFill (juce::ColourGradient (accent.withAlpha (0.55f), 0.0f, bar.getY(),
+                                                     accent.withAlpha (0.10f), 0.0f, bar.getBottom(), false));
+            g.fillRoundedRectangle (bar, 5.0f);
+        }
+        else
+        {
+            g.setColour (Palette::track.brighter (0.2f));
+            g.fillEllipse (column.getCentreX() - 3.0f, plot.getBottom() - 9.0f, 6.0f, 6.0f);
+        }
+
+        g.setColour (isPlayhead ? accent : Palette::textDim);
+        g.setFont (juce::Font (14.0f, isPlayhead ? juce::Font::bold : juce::Font::plain));
+        g.drawText (juce::String (step + 1),
+                    juce::Rectangle<float> (column.getX(), bounds.getBottom() - numberHeight, column.getWidth(), numberHeight),
                     juce::Justification::centred);
     }
 
-    for (const auto& event : recent)
+    // Recent notes, oldest first: a trail through the notes, then each note as a glowing dot that fades with age
+    const int count = (int) recent.size();
+    juce::Point<float> previous;
+    bool hasPrevious = false;
+
+    for (int i = 0; i < count; ++i)
     {
+        const auto& event = recent[(size_t) i];
         if (event.velocity <= 0.0f || event.patternStep < 0 || event.patternStep >= length)
+        {
+            hasPrevious = false;
             continue;
+        }
 
-        const float x = area.getX() + ((float) event.patternStep + 0.5f) * columnWidth;
-        const float y = centreY - juce::jlimit (-1.0f, 1.0f, event.offsetMs / rangeMs) * area.getHeight() * 0.35f;
-        const float radius = 3.0f + event.velocity / 127.0f * 5.0f;
+        const float age = count > 1 ? (float) i / (float) (count - 1) : 1.0f;
+        const float alpha = 0.2f + 0.8f * age;
+        const juce::Point<float> point (plot.getX() + ((float) event.patternStep + 0.5f) * columnWidth, yFor (event.offsetMs));
+        const float radius = 3.5f + event.velocity / 127.0f * 5.5f;
 
-        g.setColour (accent);
-        g.fillEllipse (x - radius, y - radius, radius * 2.0f, radius * 2.0f);
+        if (hasPrevious)
+        {
+            g.setColour (accent.withAlpha (0.3f * alpha));
+            g.drawLine (previous.x, previous.y, point.x, point.y, 1.5f);
+        }
+
+        g.setColour (accent.withAlpha (0.15f * alpha));
+        g.fillEllipse (point.x - radius * 2.2f, point.y - radius * 2.2f, radius * 4.4f, radius * 4.4f);
+        g.setColour (accent.withAlpha (alpha));
+        g.fillEllipse (point.x - radius, point.y - radius, radius * 2.0f, radius * 2.0f);
+        g.setColour (juce::Colours::white.withAlpha (0.35f * alpha));
+        g.fillEllipse (point.x - radius * 0.35f, point.y - radius * 0.55f, radius * 0.5f, radius * 0.5f);
+
+        previous = point;
+        hasPrevious = true;
     }
 }
 
@@ -534,9 +604,12 @@ void MicroTimingChaosEditor::timerCallback()
 
     const auto& apvts = processor.apvts;
     const int lengthValue = juce::roundToInt (apvts.getRawParameterValue (MicroTimingChaosProcessor::lengthId)->load());
-    const auto seedValue = (std::uint32_t) juce::roundToInt (apvts.getRawParameterValue (MicroTimingChaosProcessor::seedId)->load());
-    const float densityValue = apvts.getRawParameterValue (MicroTimingChaosProcessor::densityId)->load() / 100.0f;
-    const float timingValue = apvts.getRawParameterValue (MicroTimingChaosProcessor::timingRangeId)->load();
+    // The pattern shown is the one the sequencer plays: the modulated seed and density, with the same density curve.
+    using Target = MicroTimingChaosProcessor::ModTarget;
+    const auto seedValue = (std::uint32_t) juce::roundToInt (processor.getModulatedValue (Target::Seed, MicroTimingChaosProcessor::seedId));
+    const float densityValue = CoreDSP::Sequencer::densityCurve (
+        processor.getModulatedValue (Target::Density, MicroTimingChaosProcessor::densityId) / 100.0f);
+    const float timingValue = processor.getModulatedValue (Target::TimingRange, MicroTimingChaosProcessor::timingRangeId);
     const int rootValue = juce::roundToInt (apvts.getRawParameterValue (MicroTimingChaosProcessor::rootId)->load());
 
     std::vector<bool> fires;

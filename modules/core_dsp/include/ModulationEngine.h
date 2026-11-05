@@ -28,12 +28,31 @@ namespace CoreDSP::Modulation
     };
 
     /**
+     * Smooth value noise: a random value at each integer lattice point, joined with a smoothstep curve.
+     * The lattice position x is in cycles (or any unit), so the curve is continuous everywhere. Output in [-1, 1].
+     */
+    inline float smoothNoise (std::uint32_t seed, double x) noexcept
+    {
+        const double cell = std::floor (x);
+        const double t = x - cell;
+        const double fade = t * t * (3.0 - 2.0 * t);
+        const auto index = static_cast<std::uint32_t> (static_cast<std::int64_t> (cell));
+
+        const float a = 2.0f * CoreDSP::Sequencer::hashUnit (seed, index) - 1.0f;
+        const float b = 2.0f * CoreDSP::Sequencer::hashUnit (seed, index + 1u) - 1.0f;
+
+        return a + (b - a) * (float) fade;
+    }
+
+    /**
      * Output in [-1, 1] for a number of elapsed cycles.
      *
      * Sine: sin(2 pi p). Triangle: 1 - 4|p - 0.5|, starting at -1. Saw: 2p - 1, rising.
-     * Square: +1 for p < 0.5, otherwise -1. Sample and hold: a random value per cycle, from hashUnit.
-     * Random: a random value from a hash, but varies more slowly.
-     * Noise: white noise based on cycles and seed.
+     * Square: +1 for p < 0.5, otherwise -1.
+     * Sample and hold: one random level per cycle, held until the next cycle.
+     * Random: a smooth random curve, with two random points per cycle, so it sweeps up and down.
+     * Noise: smooth fractal noise, three layers of random curves (8, 16 and 32 points per cycle, at
+     * half the strength each), for an organic, irregular movement.
      * Here p is the fractional part of the cycle count.
      */
     inline float lfoValue (LfoShape shape, double cycles, std::uint32_t seed) noexcept
@@ -56,28 +75,32 @@ namespace CoreDSP::Modulation
                 return p < 0.5 ? 1.0f : -1.0f;
 
             case LfoShape::sampleAndHold:
+            {
+                const auto index = static_cast<std::uint32_t> (static_cast<std::int64_t> (cycleFloor));
+                return 2.0f * CoreDSP::Sequencer::hashUnit (seed, index) - 1.0f;
+            }
+
             case LfoShape::random:
+                return smoothNoise (seed, cycles * 2.0);
+
             case LfoShape::noise:
             {
-                // For sampleAndHold and random, we use the cycleFloor to generate a pseudo-random value
-                const auto index = static_cast<std::uint32_t> (static_cast<std::int64_t> (cycleFloor));
-                // Combine seed and index for variation
-                const std::uint32_t combinedSeed = seed ^ index;
-                const float value = 2.0f * CoreDSP::Sequencer::hashUnit (combinedSeed, index) - 1.0f;
-                
-                if (shape == LfoShape::random)
+                float sum = 0.0f;
+                float strength = 1.0f;
+                float total = 0.0f;
+
+                for (int layer = 0; layer < 3; ++layer)
                 {
-                    // For random, add some additional variation by using a different hash
-                    return 2.0f * CoreDSP::Sequencer::hashUnit (combinedSeed, combinedSeed) - 1.0f;
+                    sum += strength * smoothNoise (seed + 0x9E37u * (std::uint32_t) layer, cycles * 8.0 * (double) (1 << layer));
+                    total += strength;
+                    strength *= 0.5f;
                 }
-                else if (shape == LfoShape::noise)
-                {
-                    // Simple noise: use the fractional part p to vary noise level
-                    return (float) (std::sin (p * 100.0) * value);
-                }
-                
-                return value;
+
+                return sum / total;
             }
+
+            case LfoShape::count:
+                break;
         }
 
         return 0.0f;

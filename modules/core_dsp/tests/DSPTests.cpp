@@ -822,7 +822,7 @@ namespace
         assert (Mod::lfoValue (Mod::LfoShape::square, 0.75, seed) == -1.0f);
 
         // Every shape stays in [-1, 1], also for negative and large cycle counts.
-        for (int shape = 0; shape <= 4; ++shape)
+        for (int shape = 0; shape <= 6; ++shape)
             for (double c = -5.0; c < 5.0; c += 0.01)
             {
                 const float v = Mod::lfoValue ((Mod::LfoShape) shape, c, seed);
@@ -840,6 +840,23 @@ namespace
         assert (Mod::modulatedNormalised (1.5f, -0.5f) == 1.0f);
         assert (std::abs (Mod::modulatedNormalised (-0.5f, 0.6f) - 0.1f) < 1e-6f);
         assert (Mod::modulatedNormalised (-0.5f, -0.6f) == 0.0f);
+
+        // Random and Noise are smooth curves that vary: no jumps between neighbouring samples, and real movement.
+        for (const auto shape : { Mod::LfoShape::random, Mod::LfoShape::noise })
+        {
+            double sum = 0.0, sumSquares = 0.0;
+            float previous = Mod::lfoValue (shape, 0.0, seed);
+            for (int i = 1; i <= 4000; ++i)
+            {
+                const float value = Mod::lfoValue (shape, i * 0.001, seed);
+                assert (std::abs (value - previous) < 0.05f);   // continuous: no jumps
+                previous = value;
+                sum += value;
+                sumSquares += (double) value * value;
+            }
+            const double mean = sum / 4000.0;
+            assert (std::sqrt (sumSquares / 4000.0 - mean * mean) > 0.2);   // varies across the range
+        }
 
         std::puts ("[PASS] testModulationShapes");
     }

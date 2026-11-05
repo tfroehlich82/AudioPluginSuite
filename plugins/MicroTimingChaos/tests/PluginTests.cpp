@@ -1186,6 +1186,8 @@ namespace
 
         checkEditor (processor);
 
+        checkEditor (processor);
+
         // The window shows at two thirds of the design size, and the layout keeps its design size.
         std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditorIfNeeded());
         assert (editor->getWidth() == 1695 && editor->getHeight() == 1380);

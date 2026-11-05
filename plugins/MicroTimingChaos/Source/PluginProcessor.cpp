@@ -595,7 +595,7 @@ void MicroTimingChaosProcessor::scheduleStep (std::int64_t stepIndex, double ste
     const int patternIndex = (int) (((stepIndex % lengthValue) + lengthValue) % lengthValue);
     const auto seedValue = (std::uint32_t) juce::roundToInt (modulatedValue (ModTarget::Seed, seed->load(), offsets));
     const float densityValue = modulatedValue (ModTarget::Density, density->load(), offsets) / 100.0f;
-    const float effectiveDensity = densityValue > 0.0f ? log1p (densityValue * 0.99f) / log1p (0.99f) : 0.0f;
+    const float effectiveDensity = densityCurve (densityValue);
     const double stepLength = stepBeats (juce::roundToInt (rate->load()));
 
     const float speedValue = modulatedValue (ModTarget::Speed, speed->load(), offsets);

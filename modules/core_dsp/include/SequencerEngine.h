@@ -24,6 +24,12 @@ namespace CoreDSP::Sequencer
         return 1.0 / (double) (1 << std::clamp (rateIndex, 0, numRates - 1));
     }
 
+    /** The chance that a step fires for a density in [0, 1]. The curve is logarithmic, so low densities change more finely. */
+    inline float densityCurve (float density) noexcept
+    {
+        return density > 0.0f ? std::log1p (density * 0.99f) / std::log1p (0.99f) : 0.0f;
+    }
+
     /** Deterministic hash of (seed, index), mapped to [0, 1). The same seed always gives the same pattern. */
     inline float hashUnit (std::uint32_t seed, std::uint32_t index) noexcept
     {
