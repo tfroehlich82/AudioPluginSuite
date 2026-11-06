@@ -566,7 +566,7 @@ SuiteModulation::ModulationPanel::Style MicroTimingChaosEditor::modulationStyle(
 {
     namespace Palette = MicroTimingChaos::Palette;
 
-    return { { juce::Colours::purple, Palette::lfo2 },
+    return { { Palette::lfo1, Palette::lfo2 },
              Palette::text, Palette::textDim, Palette::panel, Palette::track };
 }
 
