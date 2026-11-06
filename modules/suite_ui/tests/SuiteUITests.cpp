@@ -62,7 +62,12 @@ namespace
         empty.setSelectedIndex (3);
         assert (empty.getSelectedIndex() == 0);
 
-        assert (paintAndCountVisiblePixels (selector, 240, 30) > 0);
+        // Diagnostics for the CI runner: print the state the paint check ran in before asserting on it.
+        const int painted = paintAndCountVisiblePixels (selector, 240, 30);
+        std::printf ("[DIAG] selector bounds=%s visible=%d showing=%d opaque=%d painted=%d\n",
+                     selector.getBounds().toString().toRawUTF8(), (int) selector.isVisible(),
+                     (int) selector.isShowing(), (int) selector.isOpaque(), painted);
+        assert (painted > 0);
 
         std::puts ("[PASS] testSegmentedSelector");
     }
