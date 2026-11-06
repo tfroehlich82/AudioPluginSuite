@@ -31,16 +31,19 @@ jobs:
             configure: cmake -S . -B build -A x64
           - name: macOS
             # Pinned to match build.yml; see the comment there.
-            os: macos-14
+            os: macos-15
             configure: cmake -S . -B build -G Xcode
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Select Xcode 15.4 (macOS)
+      - name: Select Xcode
         if: runner.os == 'macOS'
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+        run: |
+          # Use the default pre-installed Xcode or select an available toolchain path if needed
+          sudo xcode-select -switch /Applications/Xcode.app/Contents/Developer
+          xcodebuild -version
 
       - name: Configure
         run: ${{ matrix.configure }}
