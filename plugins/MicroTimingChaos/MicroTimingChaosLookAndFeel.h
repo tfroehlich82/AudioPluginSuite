@@ -17,6 +17,7 @@ namespace MicroTimingChaos
         inline const juce::Colour timing     { 0xff2de2ff };  // cyan: X, timing
         inline const juce::Colour pitch      { 0xffff9f1c };  // amber: Y, pitch and gate
         inline const juce::Colour velocity   { 0xff7dff5a };  // lime: Z, velocity and the default accent
+        inline const juce::Colour lfo2       { 0xffff5fae };  // pink: LFO 2 (LFO 1 is purple)
     }
 
     /** Look and feel for Micro-Timing Chaos. Textures and icons come from BinaryData (see CMakeLists.txt). */

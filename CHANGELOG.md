@@ -32,6 +32,10 @@ All notable changes to this project are documented here. The format follows
 - GNU GPL v3 licence (`LICENSE`).
 
 ### Changed
+- Micro-Timing Chaos: a new **LFO Offset** control for each LFO, −100 % to +100 %, default 0 %. It moves the waveform up or down before routing, and the output stops at −1 and +1. It sits on the LFO's shape row. The scope curve shows the offset too. Two parameters were added (`lfo1Offset`, `lfo2Offset`); at 0 % the output is unchanged.
+- Micro-Timing Chaos: the BPM Sync button has a sync-arrows icon in place of the old glyph.
+- Micro-Timing Chaos: LFO 2 is pink (`#FF5FAE`) instead of orange.
+- Micro-Timing Chaos: the X / Y / Z axis legend moved from the title band into the Lerp Preview panel.
 - JUCE upgraded from 7.0.9 to 9.0.5, the latest stable release. The Micro-Timing Chaos sources used `Drawable::createFromSVG`, `Font::getStringWidthFloat` and the removed `addDefaultFormats`, and were updated for the new API. The test helpers now release the `Graphics` before reading pixels, and hand the editor back to the processor before it is destroyed.
 - The LFO and control assignment code of Micro-Timing Chaos moved to the shared `suite_modulation` module. The LFO panel, the LFO scope and the routing now come from the module, and the plugin's own copies are gone. No change to sound, parameters, defaults or saved sessions. The editor renders byte-identically before and after.
 - Spectral Drift Shifter: the Feedback control runs from 0 to 20 %. Processing still caps the feedback at 12 %, so values above 12 % act as 12 %.

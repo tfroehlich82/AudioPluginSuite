@@ -78,6 +78,7 @@ Two LFOs, each with a rate, a shape and a sync switch, and six routing slots. A 
 | **LFO Shape** | Sine, Triangle, Saw, Square, Sample & Hold, Random, Noise | Sine | The waveform. Sample & Hold picks a new random level on each cycle. |
 | **LFO Sync** | on / off | off | Locks the LFO to musical time. |
 | **LFO Division** | 4 bars, 2 bars, 1 bar, 1/2, 1/4, 1/8, 1/16 | 1/4 | The cycle length while synced. |
+| **LFO Offset** | −100 % to +100 % | 0 % | Moves the LFO up or down before it is routed. The output stops at −1 and +1. |
 | **Mod Source** | LFO 1, LFO 2 | LFO 1 | Which LFO drives the slot. |
 | **Mod Target** | see the list below | None | The control the slot moves. None turns the slot off. |
 | **Mod Amount** | −100 to +100 % | 0 % | How far the target moves. Negative values invert the LFO. |

@@ -151,7 +151,7 @@ Latency reported: 2048 samples (`setLatencySamples`). Tail length: 0.
 
 Latency reported: the oversampler's integer latency, computed in `prepareToPlay`. The dry path is delayed by the same amount. Tail length: 0.
 
-### 4.3 Micro-Timing Chaos Sequencer (46 parameters)
+### 4.3 Micro-Timing Chaos Sequencer (48 parameters)
 
 | ID | Name | Range | Default | Notes |
 |---|---|---|---|---|
@@ -179,6 +179,7 @@ Latency reported: the oversampler's integer latency, computed in `prepareToPlay`
 | `lfo1Shape` / `lfo2Shape` | LFO Shape | Sine, Triangle, Saw, Square, Sample & Hold, Random, Noise | Sine | Index 0 to 6 |
 | `lfo1Sync` / `lfo2Sync` | LFO Sync | off / on | off | Locks the LFO to musical time |
 | `lfo1Division` / `lfo2Division` | LFO Division | 4 bars, 2 bars, 1 bar, 1/2, 1/4, 1/8, 1/16 | 1/4 | Cycle length: 16, 8, 4, 2, 1, 0.5, 0.25 beats. Used while synced |
+| `lfo1Offset` / `lfo2Offset` | LFO Offset | −100 – +100 % | 0 % | Added to the waveform before routing and the scope curve, then limited to −1 … +1. 0 % leaves the LFO unchanged |
 | `mod1Source` … `mod6Source` | Mod Source | LFO 1, LFO 2 | LFO 1 | Which LFO drives the slot |
 | `mod1Target` … `mod6Target` | Mod Target | the 14 targets in section 4.4 | None | Index 0 to 14. Append-only, see 4.4 |
 | `mod1Amount` … `mod6Amount` | Mod Amount | −100 – +100 % | 0 % | Signed. 0 % leaves the slot idle |

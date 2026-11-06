@@ -6,8 +6,8 @@
     </linearGradient>
   </defs>
   <rect x="12" y="12" width="40" height="40" rx="8" fill="#151a22" stroke="url(#grad)" stroke-width="2"/>
-  <path d="M28 32 L32 28 L36 32 L32 36 Z" fill="url(#grad)"/>
-  <circle cx="24" cy="24" r="4" fill="#2de2ff"/>
-  <circle cx="40" cy="24" r="4" fill="#2de2ff"/>
-  <path d="M32 16 L32 28 M32 36 L32 48" stroke="#2de2ff" stroke-width="2" stroke-linecap="round"/>
+  <!-- Sync symbol: two arcs chasing each other, each ending in an arrowhead -->
+  <path d="M21.66 28.24 A11 11 0 0 1 42.34 28.24 M42.34 35.76 A11 11 0 0 1 21.66 35.76" fill="none" stroke="url(#grad)" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M45.63 27.04 L43.70 32.00 L39.05 29.44 Z" fill="url(#grad)"/>
+  <path d="M18.37 36.96 L20.29 32.00 L24.95 34.56 Z" fill="url(#grad)"/>
 </svg>

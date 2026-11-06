@@ -88,6 +88,12 @@ namespace SuiteModulation
         /** UI thread: the published LFO output, -1 to 1. */
         float getLfoValue(int lfo) const noexcept;
 
+        /** UI thread: the LFO's offset as a fraction, -1 to 1 (the Offset control in percent, divided by 100). */
+        float getLfoOffset(int lfo) const noexcept;
+
+        /** The waveform value moved by an offset and limited to -1 to 1. Used for the output and for the scope's curve. */
+        static float withOffset(float value, float offset) noexcept;
+
         /** UI thread: the published LFO position within its cycle, 0 to 1. */
         float getLfoPhase(int lfo) const noexcept;
 
@@ -104,6 +110,7 @@ namespace SuiteModulation
         const char* hostSyncId;
 
         std::array<juce::RangedAudioParameter*, maxTargets> targetParams {};
+        std::array<std::atomic<float>*, lfoCount> lfoOffset {};
         std::array<std::atomic<float>*, maxTargets> targetRaw {};  // the base values, read by the UI
 
         // Read-only raw values, looked up once in the constructor
@@ -115,6 +122,9 @@ namespace SuiteModulation
         std::array<double, lfoCount> lfoCycles {};  // free LFOs: cycles counted at the start of the block
 
         double lfoCyclesAt(int lfo, double timeSamples, double beat, double blockStartSample) const;
+
+        /** The LFO's output at a cycle position: its waveform, moved by its Offset. */
+        float lfoOutputAt(int lfo, double cycles) const;
 
         std::array<std::atomic<float>, maxTargets> publishedOffset {};
         std::array<std::atomic<float>, lfoCount> publishedLfoValue {};

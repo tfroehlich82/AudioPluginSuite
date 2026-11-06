@@ -19,11 +19,13 @@ namespace SuiteModulation
     {
         const float phase = router.getLfoPhase(lfoIndex);
         const float value = router.getLfoValue(lfoIndex);
+        const float offset = router.getLfoOffset(lfoIndex);
 
-        if (phase != shownPhase || value != shownValue)
+        if (phase != shownPhase || value != shownValue || offset != shownOffset)
         {
             shownPhase = phase;
             shownValue = value;
+            shownOffset = offset;
             repaint();
         }
     }
@@ -47,7 +49,8 @@ namespace SuiteModulation
         for (int i = 0; i <= waveformPoints; ++i)
         {
             const double cycles = (double) i / (double) waveformPoints;
-            const float value = CoreDSP::Modulation::lfoValue(shape, cycles, seed);
+            // The curve is the output the routing receives, so it includes the Offset.
+            const float value = Router::withOffset(CoreDSP::Modulation::lfoValue(shape, cycles, seed), router.getLfoOffset(lfoIndex));
             const juce::Point<float> point(area.getX() + area.getWidth() * (float) cycles,
                                            midLine - value * area.getHeight() * 0.5f);
 

@@ -6,11 +6,34 @@ namespace
 {
     namespace Palette = MicroTimingChaos::Palette;
 
+    constexpr float legendRowHeight = 18.0f;
     constexpr float meterRowHeight = 26.0f;
     constexpr float laneLabelWidth = 84.0f;
     constexpr float dotRadius = 3.5f;
     constexpr int pitchSpanSemitones = 36;     // the pitch lane shows root - 12 to root + 24
     constexpr int pitchLowestOffset = -12;
+
+    // Axis legend, right-aligned: X drives timing, Y pitch and gate, Z velocity
+    void drawLegend (juce::Graphics& g, juce::Rectangle<float> row)
+    {
+        const juce::Font font (13.0f);
+        const struct { juce::String text; juce::Colour colour; } items[] = {
+            { "X  timing", Palette::timing },
+            { "Y  pitch & gate", Palette::pitch },
+            { "Z  velocity", Palette::velocity }
+        };
+
+        g.setFont (font);
+        float right = row.getRight();
+        for (int i = 2; i >= 0; --i)
+        {
+            const float width = juce::GlyphArrangement::getStringWidth (font, items[i].text) + 8.0f;
+            g.setColour (items[i].colour);
+            g.drawText (items[i].text, juce::Rectangle<float> (right - width, row.getY(), width, row.getHeight()),
+                        juce::Justification::centredRight);
+            right -= width + 14.0f;
+        }
+    }
 
     void drawMeter (juce::Graphics& g, juce::Rectangle<float> row, const char* label, float amount, juce::Colour colour)
     {
@@ -57,6 +80,9 @@ void LerpPreview::paint (juce::Graphics& g)
     g.fillRoundedRectangle (bounds, 6.0f);
 
     auto area = bounds.reduced (12.0f, 10.0f);
+
+    drawLegend (g, area.removeFromTop (legendRowHeight));
+    area.removeFromTop (4.0f);
 
     // Current drift per axis
     drawMeter (g, area.removeFromTop (meterRowHeight), "TIMING", drift.timing, Palette::timing);

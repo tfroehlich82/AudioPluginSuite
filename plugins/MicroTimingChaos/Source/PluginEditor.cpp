@@ -446,25 +446,6 @@ void MicroTimingChaosEditor::paint (juce::Graphics& g)
     g.setFont (juce::Font (26.0f, juce::Font::bold));
     g.drawText ("MICRO-TIMING CHAOS", header, juce::Justification::centredLeft);
 
-    // Axis legend, right-aligned: X drives timing, Y pitch and gate, Z velocity
-    const juce::Font legendFont (14.0f);
-    const struct { juce::String text; juce::Colour colour; } legend[] = {
-        { "X  timing", Palette::timing },
-        { "Y  pitch & gate", Palette::pitch },
-        { "Z  velocity", Palette::velocity }
-    };
-
-    g.setFont (legendFont);
-    float right = header.getRight();
-    for (int i = 2; i >= 0; --i)
-    {
-        const float width = juce::GlyphArrangement::getStringWidth (legendFont, legend[i].text) + 8.0f;
-        g.setColour (legend[i].colour);
-        g.drawText (legend[i].text, juce::Rectangle<float> (right - width, header.getY(), width, header.getHeight()),
-                    juce::Justification::centredRight);
-        right -= width + 14.0f;
-    }
-
     // Every group title has the same colour and size.
     for (const auto& group : groups)
     {
@@ -585,7 +566,7 @@ SuiteModulation::ModulationPanel::Style MicroTimingChaosEditor::modulationStyle(
 {
     namespace Palette = MicroTimingChaos::Palette;
 
-    return { { juce::Colours::purple, juce::Colours::orange },
+    return { { juce::Colours::purple, Palette::lfo2 },
              Palette::text, Palette::textDim, Palette::panel, Palette::track };
 }
 
