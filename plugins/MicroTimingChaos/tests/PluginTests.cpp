@@ -99,6 +99,7 @@ namespace
                              Processor::lerpZMultId, Processor::speedId, Processor::bpmId, Processor::syncId,
                              Processor::lfo1RateId, Processor::lfo1ShapeId, Processor::lfo1SyncId, Processor::lfo1DivisionId,
                              Processor::lfo2RateId, Processor::lfo2ShapeId, Processor::lfo2SyncId, Processor::lfo2DivisionId,
+                             Processor::lfo1OffsetId, Processor::lfo2OffsetId,
                              Processor::modSourceIds[0], Processor::modTargetIds[0], Processor::modAmountIds[0],
                              Processor::modSourceIds[1], Processor::modTargetIds[1], Processor::modAmountIds[1],
                              Processor::modSourceIds[2], Processor::modTargetIds[2], Processor::modAmountIds[2],
@@ -877,6 +878,30 @@ namespace
     }
 
     // An LFO on Timing Range moves the timing. At Amount 0 the LFO has no effect at all.
+    // The Offset moves the LFO output before it is routed, and the output stops at -1 and +1.
+    void testLfoOffset()
+    {
+        // The output after one block, for a free 1 Hz sine with the given offset. Each call starts at the same phase.
+        auto outputAt = [] (float offsetPercent)
+        {
+            Processor processor;
+            setLfo (processor, 0, 1.0f, 0.0f, false, 4.0f);
+            setParameter (processor.apvts, Processor::lfo1OffsetId, offsetPercent);
+            processor.prepareToPlay (sampleRate, blockSize);
+
+            int64_t sample = 0;
+            run (processor, sample, 1);
+            return processor.getLfoValue (0);
+        };
+
+        const float base = outputAt (0.0f);
+        assert (std::abs (outputAt (50.0f) - std::min (1.0f, base + 0.5f)) < 1e-5f);
+        assert (std::abs (outputAt (-100.0f) - std::max (-1.0f, base - 1.0f)) < 1e-5f);
+        assert (outputAt (100.0f) <= 1.0f && outputAt (-100.0f) >= -1.0f);
+
+        pass ("testLfoOffset");
+    }
+
     void testSineOnTimingRangeChangesOffsets()
     {
         auto offsetsFor = [] (float amount, float lfoHz)
@@ -1205,6 +1230,7 @@ int main()
     testLerpCurveSurvivesStateRoundTrip();
     testLerpDriftIsHybrid();
     testNoModulationIsIdentical();
+    testLfoOffset();
     testSineOnTimingRangeChangesOffsets();
     testBipolarAmountInvertsModulation();
     testSyncedLfoFollowsBeats();

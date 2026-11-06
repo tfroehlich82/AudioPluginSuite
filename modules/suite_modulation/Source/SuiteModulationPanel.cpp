@@ -23,6 +23,10 @@ namespace SuiteModulation
         const std::array<const char*, Router::lfoCount> lfoShapeIds { "lfo1Shape", "lfo2Shape" };
         const std::array<const char*, Router::lfoCount> lfoSyncIds { "lfo1Sync", "lfo2Sync" };
         const std::array<const char*, Router::lfoCount> lfoDivisionIds { "lfo1Division", "lfo2Division" };
+        const std::array<const char*, Router::lfoCount> lfoOffsetIds { "lfo1Offset", "lfo2Offset" };
+
+        constexpr int offsetLabelWidth = 52;
+        constexpr int offsetTextWidth = 60;
 
         const std::array<const char*, Router::slotCount> modSourceIds { "mod1Source", "mod2Source", "mod3Source", "mod4Source", "mod5Source", "mod6Source" };
         const std::array<const char*, Router::slotCount> modTargetIds { "mod1Target", "mod2Target", "mod3Target", "mod4Target", "mod5Target", "mod6Target" };
@@ -46,7 +50,8 @@ namespace SuiteModulation
     {
         LfoStrip (Router& router, int index, const ModulationPanel::Style& style)
             : rate ("RATE", juce::Slider::RotaryVerticalDrag),
-              scope (router, index, style.lfoColours[index], style.panel, style.track)
+              scope (router, index, style.lfoColours[index], style.panel, style.track),
+              offset (juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight)
         {
             const auto i = (size_t) index;
             auto& state = router.getState();
@@ -55,20 +60,31 @@ namespace SuiteModulation
             shape.addItemList (shapeNames(), 1);
             division.addItemList (divisionNames(), 1);
 
+            offsetLabel.setText ("OFFSET", juce::dontSendNotification);
+            offsetLabel.setColour (juce::Label::textColourId, style.textDim);
+            offsetLabel.setFont (juce::Font (12.0f, juce::Font::bold));
+            offset.setTextBoxStyle (juce::Slider::TextBoxRight, false, offsetTextWidth, controlHeight);
+            offset.setTextValueSuffix (" %");
+            offset.setNumDecimalPlacesToDisplay (0);
+
             rateAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (state, lfoRateIds[i], rate.slider);
             shapeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (state, lfoShapeIds[i], shape);
             syncAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (state, lfoSyncIds[i], sync);
             divisionAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (state, lfoDivisionIds[i], division);
+            offsetAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (state, lfoOffsetIds[i], offset);
 
             rate.setHelpText (name + " rate in Hz. Disabled while Sync is on.");
             rate.slider.setHelpText (name + " rate in Hz. Disabled while Sync is on.");
             shape.setHelpText (name + " waveform. Sample & Hold picks a new random level on each cycle.");
+            offset.setHelpText (name + " offset, from -100 % to +100 %. It moves the waveform up or down before routing, and the output stops at -1 and +1.");
             sync.setHelpText (name + " follows the host tempo. The division then sets the cycle length.");
             division.setHelpText (name + " cycle length in bars or beats. Used only while Sync is on.");
             scope.setHelpText (name + " shape. The dot shows where the LFO is now.");
 
             addAndMakeVisible (rate);
             addAndMakeVisible (shape);
+            addAndMakeVisible (offsetLabel);
+            addAndMakeVisible (offset);
             addAndMakeVisible (sync);
             addAndMakeVisible (division);
             addAndMakeVisible (scope);
@@ -78,13 +94,18 @@ namespace SuiteModulation
         {
             auto area = getLocalBounds();
 
-            // Rate knob on the left, the scope, shape, sync and division on the right
+            // Rate knob on the left, the scope, then shape with offset, sync and division on the right
             rate.setBounds (area.removeFromLeft (knobWidth));
             area.removeFromLeft (gap);
 
             scope.setBounds (area.removeFromTop (scopeHeight));
             area.removeFromTop (5);
-            shape.setBounds (area.removeFromTop (controlHeight));
+
+            auto shapeRow = area.removeFromTop (controlHeight);
+            auto offsetArea = shapeRow.removeFromRight (juce::roundToInt ((float) shapeRow.getWidth() * 0.5f));
+            shape.setBounds (shapeRow);
+            offsetLabel.setBounds (offsetArea.removeFromLeft (offsetLabelWidth));
+            offset.setBounds (offsetArea);
             area.removeFromTop (4);
 
             auto row = area.removeFromTop (controlHeight);
@@ -100,11 +121,14 @@ namespace SuiteModulation
         juce::ToggleButton sync { "SYNC" };
         juce::ComboBox division;
         SuiteModulation::LfoScope scope;
+        juce::Label offsetLabel;
+        juce::Slider offset;
 
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> rateAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> shapeAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> syncAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> divisionAttachment;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> offsetAttachment;
     };
 
     //==============================================================================

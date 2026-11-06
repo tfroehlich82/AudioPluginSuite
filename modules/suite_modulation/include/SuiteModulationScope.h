@@ -27,6 +27,7 @@ namespace SuiteModulation
 
         float shownPhase = -1.0f;
         float shownValue = 2.0f;
+        float shownOffset = 2.0f;
     };
 
 }  // namespace SuiteModulation

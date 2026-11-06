@@ -12,6 +12,7 @@ namespace SuiteModulation
         constexpr std::array<const char*, Router::lfoCount> lfoShapeIds { "lfo1Shape", "lfo2Shape" };
         constexpr std::array<const char*, Router::lfoCount> lfoSyncIds { "lfo1Sync", "lfo2Sync" };
         constexpr std::array<const char*, Router::lfoCount> lfoDivisionIds { "lfo1Division", "lfo2Division" };
+        constexpr std::array<const char*, Router::lfoCount> lfoOffsetIds { "lfo1Offset", "lfo2Offset" };
 
         constexpr std::array<const char*, Router::slotCount> modSourceIds { "mod1Source", "mod2Source", "mod3Source", "mod4Source", "mod5Source", "mod6Source" };
         constexpr std::array<const char*, Router::slotCount> modTargetIds { "mod1Target", "mod2Target", "mod3Target", "mod4Target", "mod5Target", "mod6Target" };
@@ -58,6 +59,11 @@ namespace SuiteModulation
 
             params.push_back(std::make_unique<juce::AudioParameterChoice>(
                 juce::ParameterID { lfoDivisionIds[(size_t) lfo], 1 }, "LFO " + number + " Division", divisionNames(), 4));
+
+            // Offset: added to the waveform before routing, so it is a DC shift. 0 % leaves the LFO unchanged.
+            params.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { lfoOffsetIds[(size_t) lfo], 1 }, "LFO " + number + " Offset",
+                juce::NormalisableRange<float>(-100.0f, 100.0f, 0.1f), 0.0f, "%"));
         }
 
         for (int slot = 0; slot < slotCount; ++slot)
@@ -87,6 +93,7 @@ namespace SuiteModulation
             lfoShape[(size_t) lfo] = apvts.getRawParameterValue(lfoShapeIds[(size_t) lfo]);
             lfoSync[(size_t) lfo] = apvts.getRawParameterValue(lfoSyncIds[(size_t) lfo]);
             lfoDivision[(size_t) lfo] = apvts.getRawParameterValue(lfoDivisionIds[(size_t) lfo]);
+            lfoOffset[(size_t) lfo] = apvts.getRawParameterValue(lfoOffsetIds[(size_t) lfo]);
         }
 
         for (int slot = 0; slot < slotCount; ++slot)
@@ -148,10 +155,7 @@ namespace SuiteModulation
                 continue;
 
             const int source = clampedChoice(modSource[index]->load(), lfoCount);
-            const auto shape = static_cast<CoreDSP::Modulation::LfoShape>(getLfoShape(source));
-            const float value = CoreDSP::Modulation::lfoValue(shape,
-                                    lfoCyclesAt(source, timeSamples, beat, blockStartSample),
-                                    lfoSeeds[(size_t) source]);
+            const float value = lfoOutputAt(source, lfoCyclesAt(source, timeSamples, beat, blockStartSample));
 
             offsets.value[(size_t) target] += amount * value;
         }
@@ -198,11 +202,9 @@ namespace SuiteModulation
         for (int lfo = 0; lfo < lfoCount; ++lfo)
         {
             const double cycles = lfoCyclesAt(lfo, blockStartSample, beatAtBlockStart, blockStartSample);
-            const auto shape = static_cast<CoreDSP::Modulation::LfoShape>(getLfoShape(lfo));
 
             publishedLfoPhase[(size_t) lfo].store((float) (cycles - std::floor(cycles)), std::memory_order_relaxed);
-            publishedLfoValue[(size_t) lfo].store(CoreDSP::Modulation::lfoValue(shape, cycles, lfoSeeds[(size_t) lfo]),
-                                                  std::memory_order_relaxed);
+            publishedLfoValue[(size_t) lfo].store(lfoOutputAt(lfo, cycles), std::memory_order_relaxed);
         }
     }
 
@@ -248,6 +250,27 @@ namespace SuiteModulation
             return 0.0f;
 
         return publishedLfoValue[(size_t) lfo].load(std::memory_order_relaxed);
+    }
+
+    float Router::getLfoOffset(int lfo) const noexcept
+    {
+        if (lfo < 0 || lfo >= lfoCount)
+            return 0.0f;
+
+        return lfoOffset[(size_t) lfo]->load() / 100.0f;
+    }
+
+    float Router::withOffset(float value, float offset) noexcept
+    {
+        return juce::jlimit(-1.0f, 1.0f, value + offset);
+    }
+
+    float Router::lfoOutputAt(int lfo, double cycles) const
+    {
+        const auto shape = static_cast<CoreDSP::Modulation::LfoShape>(getLfoShape(lfo));
+        const float wave = CoreDSP::Modulation::lfoValue(shape, cycles, lfoSeeds[(size_t) lfo]);
+
+        return withOffset(wave, getLfoOffset(lfo));
     }
 
     float Router::getLfoPhase(int lfo) const noexcept
