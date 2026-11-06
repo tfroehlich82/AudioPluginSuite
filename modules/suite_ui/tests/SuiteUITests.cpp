@@ -23,8 +23,12 @@ namespace
         component.setBounds (0, 0, width, height);
 
         juce::Image image (juce::Image::ARGB, width, height, true);
-        juce::Graphics g (image);
-        component.paintEntireComponent (g, true);
+
+        // The Graphics must be released before the pixels are read. JUCE 9 does not make the drawing visible in the image until then.
+        {
+            juce::Graphics g (image);
+            component.paintEntireComponent (g, true);
+        }
 
         int visible = 0;
         for (int y = 0; y < height; ++y)
@@ -62,12 +66,7 @@ namespace
         empty.setSelectedIndex (3);
         assert (empty.getSelectedIndex() == 0);
 
-        // Diagnostics for the CI runner: print the state the paint check ran in before asserting on it.
-        const int painted = paintAndCountVisiblePixels (selector, 240, 30);
-        std::printf ("[DIAG] selector bounds=%s visible=%d showing=%d opaque=%d painted=%d\n",
-                     selector.getBounds().toString().toRawUTF8(), (int) selector.isVisible(),
-                     (int) selector.isShowing(), (int) selector.isOpaque(), painted);
-        assert (painted > 0);
+        assert (paintAndCountVisiblePixels (selector, 240, 30) > 0);
 
         std::puts ("[PASS] testSegmentedSelector");
     }
@@ -189,8 +188,11 @@ namespace
         component.setBounds (0, 0, width, height);
 
         juce::Image image (juce::Image::ARGB, width, height, true);
-        juce::Graphics g (image);
-        component.paintEntireComponent (g, true);
+
+        {
+            juce::Graphics g (image);
+            component.paintEntireComponent (g, true);
+        }
 
         int count = 0;
 

@@ -458,7 +458,7 @@ void MicroTimingChaosEditor::paint (juce::Graphics& g)
     float right = header.getRight();
     for (int i = 2; i >= 0; --i)
     {
-        const float width = legendFont.getStringWidthFloat (legend[i].text) + 8.0f;
+        const float width = juce::GlyphArrangement::getStringWidth (legendFont, legend[i].text) + 8.0f;
         g.setColour (legend[i].colour);
         g.drawText (legend[i].text, juce::Rectangle<float> (right - width, header.getY(), width, header.getHeight()),
                     juce::Justification::centredRight);

@@ -30,10 +30,7 @@ namespace MicroTimingChaos
         {
             int size = 0;
             if (const char* data = BinaryData::getNamedResource (name, size))
-            {
-                if (auto svg = juce::XmlDocument::parse (juce::String::fromUTF8 (data, size)))
-                    return juce::Drawable::createFromSVG (*svg);
-            }
+                return juce::Drawable::createFromSVGString (juce::String::fromUTF8 (data, size));
 
             return {};
         }
