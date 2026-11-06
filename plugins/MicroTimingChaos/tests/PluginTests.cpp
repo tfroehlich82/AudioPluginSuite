@@ -4,6 +4,8 @@
 #include "ModulationTestUtils.h"
 #include "PluginProcessor.h"
 
+#include "BinaryData.h"
+
 #include <map>
 #include <set>
 
@@ -105,7 +107,9 @@ namespace
                              Processor::modSourceIds[2], Processor::modTargetIds[2], Processor::modAmountIds[2],
                              Processor::modSourceIds[3], Processor::modTargetIds[3], Processor::modAmountIds[3],
                              Processor::modSourceIds[4], Processor::modTargetIds[4], Processor::modAmountIds[4],
-                             Processor::modSourceIds[5], Processor::modTargetIds[5], Processor::modAmountIds[5] },
+                             Processor::modSourceIds[5], Processor::modTargetIds[5], Processor::modAmountIds[5],
+                             Processor::modDelayIds[0], Processor::modDelayIds[1], Processor::modDelayIds[2],
+                             Processor::modDelayIds[3], Processor::modDelayIds[4], Processor::modDelayIds[5] },
                            Processor::numControls);
 
         checkRange (processor.apvts, Processor::rateId, 0.0f, 3.0f, 2.0f);
@@ -902,6 +906,118 @@ namespace
         pass ("testLfoOffset");
     }
 
+    // Finds the first component with the given ID, searching the children recursively.
+    juce::Component* findComponent (juce::Component& root, const juce::String& id)
+    {
+        if (root.getComponentID() == id)
+            return &root;
+
+        for (auto* child : root.getChildren())
+            if (auto* found = findComponent (*child, id))
+                return found;
+
+        return nullptr;
+    }
+
+    // The Offset control must be on screen, reachable by the mouse and the keyboard, and it must change the parameter.
+    void testOffsetControlIsUsable()
+    {
+        Processor processor;
+        processor.prepareToPlay (sampleRate, blockSize);
+
+        std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditorAndMakeActive());
+        assert (editor != nullptr);
+        // Not in a window, so the editor is made visible by hand; hit testing ignores hidden components.
+        editor->setVisible (true);
+        editor->setSize (editor->getWidth(), editor->getHeight());
+        editor->resized();
+
+        auto* slider = dynamic_cast<juce::Slider*> (findComponent (*editor, Processor::lfo1OffsetId));
+        assert (slider != nullptr);
+        assert (slider->getWidth() > 200 && slider->getHeight() >= 20);
+
+        // A click in the middle of the control must reach the control, not something drawn over it.
+        const auto centre = editor->getLocalPoint (slider, slider->getLocalBounds().getCentre());
+        auto* hit = editor->getComponentAt (centre);
+        assert (hit == slider || slider->isParentOf (hit));
+
+        // A drag across the track moves the value, and the parameter follows.
+        assert (getParameter (processor.apvts, Processor::lfo1OffsetId) == 0.0f);
+
+        const auto width = slider->getWidth();
+        const juce::Point<float> from ((float) width * 0.3f, 10.0f);
+        const juce::Point<float> to   ((float) width * 0.6f, 10.0f);
+        auto makeEvent = [slider] (juce::Point<float> position, juce::Point<float> downPosition, bool dragged)
+        {
+            return juce::MouseEvent (juce::Desktop::getInstance().getMainMouseSource(), position, juce::ModifierKeys(),
+                                     1.0f, 0.0f, 0.0f, 0.0f, 0.0f, slider, slider, juce::Time::getCurrentTime(),
+                                     downPosition, juce::Time::getCurrentTime(), 1, dragged);
+        };
+
+        slider->mouseDown (makeEvent (from, from, false));
+        slider->mouseDrag (makeEvent (to, from, true));
+        slider->mouseUp (makeEvent (to, from, true));
+
+        const float afterDrag = getParameter (processor.apvts, Processor::lfo1OffsetId);
+        assert (afterDrag > 10.0f);
+        assert (std::abs (slider->getValue() - afterDrag) < 1e-3);
+
+        // The keyboard nudges the value as well, and the control can take keyboard focus.
+        assert (slider->getWantsKeyboardFocus());
+        assert (slider->keyPressed (juce::KeyPress (juce::KeyPress::rightKey)));
+        assert (getParameter (processor.apvts, Processor::lfo1OffsetId) > afterDrag);
+
+        processor.editorBeingDeleted (editor.get());
+        pass ("testOffsetControlIsUsable");
+    }
+
+    // A routing's Delay holds it back until that time has passed on the delay clock, and then it works as normal.
+    void testRoutingDelay()
+    {
+        // The start sample of the first block in which the routing contributes, for a given delay in seconds.
+        auto firstAudibleBlock = [] (float delaySeconds)
+        {
+            Processor processor;
+            setLfo (processor, 0, 1.0f, 0.0f, false, 4.0f);
+            setParameter (processor.apvts, Processor::lfo1OffsetId, 50.0f);   // a constant +0.5 at the start of the cycle
+            setRoute (processor, 0, 0, 2, 100.0f);                             // slot 1: LFO 1 to Timing Range
+            setParameter (processor.apvts, Processor::modDelayIds[0], delaySeconds);
+            processor.prepareToPlay (sampleRate, blockSize);
+
+            int64_t sample = 0;
+            for (int block = 0; block < 400; ++block)
+            {
+                const int64_t blockStart = sample;
+                run (processor, sample, 1);
+
+                if (std::abs (processor.getTargetOffset (Processor::ModTarget::TimingRange)) > 1.0e-6f)
+                    return blockStart;
+            }
+
+            return (int64_t) -1;
+        };
+
+        const int64_t immediate = firstAudibleBlock (0.0f);
+        assert (immediate == 0);
+
+        const int64_t delayed = firstAudibleBlock (0.5f);
+        assert (delayed >= (int64_t) (0.5 * sampleRate) - blockSize);   // not before the delay
+        assert (delayed <= (int64_t) (0.5 * sampleRate) + 2 * blockSize);  // and not long after it
+
+        pass ("testRoutingDelay");
+    }
+
+    // The brand lockup is embedded in the binary and decodes to a wide image, so the header has something to draw.
+    void testBrandLockupLoads()
+    {
+        const auto lockup = juce::ImageCache::getFromMemory (BinaryData::lockup_micro_timing_chaos_png,
+                                                            BinaryData::lockup_micro_timing_chaos_pngSize);
+        assert (lockup.isValid());
+        assert (lockup.getWidth() > 3 * lockup.getHeight());
+
+        pass ("testBrandLockupLoads");
+    }
+
     void testSineOnTimingRangeChangesOffsets()
     {
         auto offsetsFor = [] (float amount, float lfoHz)
@@ -1193,7 +1309,7 @@ namespace
 
         // The window shows at two thirds of the design size, and the layout keeps its design size.
         std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditorAndMakeActive());
-        assert (editor->getWidth() == 1695 && editor->getHeight() == 1380);
+        assert (editor->getWidth() == 1695 && editor->getHeight() == 1400);
         assert (std::abs (editor->getTransform().mat00 - 2.0f / 3.0f) < 1e-4f);
         processor.editorBeingDeleted (editor.get());
 
@@ -1231,6 +1347,9 @@ int main()
     testLerpDriftIsHybrid();
     testNoModulationIsIdentical();
     testLfoOffset();
+    testOffsetControlIsUsable();
+    testRoutingDelay();
+    testBrandLockupLoads();
     testSineOnTimingRangeChangesOffsets();
     testBipolarAmountInvertsModulation();
     testSyncedLfoFollowsBeats();

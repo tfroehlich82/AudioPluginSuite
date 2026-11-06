@@ -64,22 +64,22 @@ namespace MicroTimingChaos
     LookAndFeel::LookAndFeel (juce::Colour accentColour)
         : accent (accentColour)
     {
-        setColour (juce::Label::textColourId, Palette::text);
-        setColour (juce::Slider::textBoxTextColourId, Palette::text);
+        setColour (juce::Label::textColourId, SuiteUI::Colours::text);
+        setColour (juce::Slider::textBoxTextColourId, SuiteUI::Colours::text);
         setColour (juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
         setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-        setColour (juce::ComboBox::textColourId, Palette::text);
-        setColour (juce::PopupMenu::backgroundColourId, Palette::panel);
-        setColour (juce::PopupMenu::textColourId, Palette::text);
+        setColour (juce::ComboBox::textColourId, SuiteUI::Colours::text);
+        setColour (juce::PopupMenu::backgroundColourId, SuiteUI::Colours::panel);
+        setColour (juce::PopupMenu::textColourId, SuiteUI::Colours::text);
         setColour (juce::PopupMenu::highlightedBackgroundColourId, accent.withAlpha (0.25f));
-        setColour (juce::PopupMenu::highlightedTextColourId, Palette::text);
+        setColour (juce::PopupMenu::highlightedTextColourId, SuiteUI::Colours::text);
     }
 
     void LookAndFeel::paint (juce::Graphics& g, juce::Component& component)
     {
         const auto area = component.getLocalBounds().toFloat();
 
-        g.fillAll (Palette::background);
+        g.fillAll (SuiteUI::Colours::background);
 
         const auto& background = backgroundImage();
         if (background.isValid())
@@ -105,7 +105,7 @@ namespace MicroTimingChaos
 
         juce::Path trackPath;
         trackPath.addCentredArc (centre.x, centre.y, arcRadius, arcRadius, 0.0f, rotaryStartAngle, rotaryEndAngle, true);
-        g.setColour (Palette::track);
+        g.setColour (SuiteUI::Colours::track);
         g.strokePath (trackPath, stroke);
 
         juce::Path valuePath;
@@ -114,20 +114,20 @@ namespace MicroTimingChaos
         // Neon value arc with a soft glow underneath
         g.setColour (accent.withAlpha (slider.isEnabled() ? 0.22f : 0.08f));
         g.strokePath (valuePath, juce::PathStrokeType (thickness * 3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-        g.setColour (slider.isEnabled() ? accent : Palette::textDim);
+        g.setColour (slider.isEnabled() ? accent : SuiteUI::Colours::textDim);
         g.strokePath (valuePath, stroke);
 
         // Knob body
         const float bodyRadius = radius * 0.64f;
-        juce::ColourGradient body (Palette::panelLight, centre.x, centre.y - bodyRadius,
-                                   Palette::panel, centre.x, centre.y + bodyRadius, false);
+        juce::ColourGradient body (SuiteUI::Colours::panelLight, centre.x, centre.y - bodyRadius,
+                                   SuiteUI::Colours::panel, centre.x, centre.y + bodyRadius, false);
         g.setGradientFill (body);
         g.fillEllipse (centre.x - bodyRadius, centre.y - bodyRadius, bodyRadius * 2.0f, bodyRadius * 2.0f);
 
         // Pointer
         const float dirX = std::sin (angle);
         const float dirY = -std::cos (angle);
-        g.setColour (slider.isEnabled() ? accent : Palette::textDim);
+        g.setColour (slider.isEnabled() ? accent : SuiteUI::Colours::textDim);
         g.drawLine (centre.x + dirX * bodyRadius * 0.25f, centre.y + dirY * bodyRadius * 0.25f,
                     centre.x + dirX * bodyRadius * 0.85f, centre.y + dirY * bodyRadius * 0.85f,
                     juce::jmax (2.0f, thickness * 0.8f));
@@ -138,9 +138,9 @@ namespace MicroTimingChaos
     {
         auto bounds = button.getLocalBounds().toFloat().reduced (1.0f);
         const bool active = button.getToggleState();
-        const auto colour = active ? accent : Palette::textDim;
+        const auto colour = active ? accent : SuiteUI::Colours::textDim;
 
-        g.setColour (shouldDrawButtonAsDown ? Palette::panelLight : Palette::panel);
+        g.setColour (shouldDrawButtonAsDown ? SuiteUI::Colours::panelLight : SuiteUI::Colours::panel);
         g.fillRoundedRectangle (bounds, 6.0f);
 
         if (active)
@@ -166,7 +166,7 @@ namespace MicroTimingChaos
 
         auto textArea = bounds.reduced (6.0f, 0.0f);
 
-        g.setColour (active ? Palette::text : Palette::textDim);
+        g.setColour (active ? SuiteUI::Colours::text : SuiteUI::Colours::textDim);
         g.setFont (juce::Font (14.0f, juce::Font::bold));
         g.drawText (button.getButtonText(), textArea.withTrimmedRight (34.0f), juce::Justification::centredLeft);
 
@@ -180,10 +180,10 @@ namespace MicroTimingChaos
     {
         const auto bounds = juce::Rectangle<float> (0.0f, 0.0f, (float) width, (float) height).reduced (1.0f);
 
-        g.setColour (Palette::panel);
+        g.setColour (SuiteUI::Colours::panel);
         g.fillRoundedRectangle (bounds, 5.0f);
 
-        g.setColour (box.hasKeyboardFocus (true) ? accent : Palette::track);
+        g.setColour (box.hasKeyboardFocus (true) ? accent : SuiteUI::Colours::track);
         g.drawRoundedRectangle (bounds, 5.0f, 1.0f);
 
         const auto arrowArea = juce::Rectangle<float> ((float) buttonX, (float) buttonY, (float) buttonW, (float) buttonH).reduced (buttonW * 0.32f, buttonH * 0.38f);
@@ -192,7 +192,7 @@ namespace MicroTimingChaos
                            arrowArea.getRight(), arrowArea.getY(),
                            arrowArea.getCentreX(), arrowArea.getBottom());
 
-        g.setColour (isButtonDown ? accent : Palette::textDim);
+        g.setColour (isButtonDown ? accent : SuiteUI::Colours::textDim);
         g.fillPath (arrow);
     }
 

@@ -7,7 +7,7 @@ namespace SuiteModulation
     namespace
     {
         // Layout constants. These match the Micro-Timing Chaos panel as it was tuned on screen.
-        constexpr int lfoBlockHeight = 120;
+        constexpr int lfoBlockHeight = 140;
         constexpr int knobWidth = 110;
         constexpr int scopeHeight = 46;
         constexpr int controlHeight = 26;
@@ -16,8 +16,23 @@ namespace SuiteModulation
         constexpr int gap = 6;
 
         // Column split of the routing rows, shared by the headings, the rows and paint()
-        constexpr float sourceFraction = 0.26f;
-        constexpr float targetFraction = 0.40f;
+        constexpr float sourceFraction = 0.22f;
+        constexpr float targetFraction = 0.32f;
+
+        // Routing row: source, target, amount and delay, with a gap between each pair
+        struct SlotColumns { int source, target, amount, delay; };
+
+        SlotColumns slotColumns (int width)
+        {
+            SlotColumns columns;
+            columns.source = juce::roundToInt ((float) width * sourceFraction);
+            columns.target = juce::roundToInt ((float) width * targetFraction);
+
+            const int rest = width - columns.source - columns.target - 3 * gap;
+            columns.amount = rest / 2;
+            columns.delay = rest - columns.amount;
+            return columns;
+        }
 
         const std::array<const char*, Router::lfoCount> lfoRateIds { "lfo1Rate", "lfo2Rate" };
         const std::array<const char*, Router::lfoCount> lfoShapeIds { "lfo1Shape", "lfo2Shape" };
@@ -25,12 +40,13 @@ namespace SuiteModulation
         const std::array<const char*, Router::lfoCount> lfoDivisionIds { "lfo1Division", "lfo2Division" };
         const std::array<const char*, Router::lfoCount> lfoOffsetIds { "lfo1Offset", "lfo2Offset" };
 
-        constexpr int offsetLabelWidth = 52;
+        constexpr int offsetLabelWidth = 64;
         constexpr int offsetTextWidth = 60;
 
         const std::array<const char*, Router::slotCount> modSourceIds { "mod1Source", "mod2Source", "mod3Source", "mod4Source", "mod5Source", "mod6Source" };
         const std::array<const char*, Router::slotCount> modTargetIds { "mod1Target", "mod2Target", "mod3Target", "mod4Target", "mod5Target", "mod6Target" };
         const std::array<const char*, Router::slotCount> modAmountIds { "mod1Amount", "mod2Amount", "mod3Amount", "mod4Amount", "mod5Amount", "mod6Amount" };
+        const std::array<const char*, Router::slotCount> modDelayIds { "mod1Delay", "mod2Delay", "mod3Delay", "mod4Delay", "mod5Delay", "mod6Delay" };
 
         juce::StringArray shapeNames() { return { "Sine", "Triangle", "Saw", "Square", "Sample & Hold", "Random", "Noise" }; }
         juce::StringArray divisionNames() { return { "4 bars", "2 bars", "1 bar", "1/2", "1/4", "1/8", "1/16" }; }
@@ -63,6 +79,8 @@ namespace SuiteModulation
             offsetLabel.setText ("OFFSET", juce::dontSendNotification);
             offsetLabel.setColour (juce::Label::textColourId, style.textDim);
             offsetLabel.setFont (juce::Font (12.0f, juce::Font::bold));
+            offset.setComponentID (lfoOffsetIds[i]);
+            offset.setWantsKeyboardFocus (true);   // arrow keys nudge the value once the control has focus
             offset.setTextBoxStyle (juce::Slider::TextBoxRight, false, offsetTextWidth, controlHeight);
             offset.setTextValueSuffix (" %");
             offset.setNumDecimalPlacesToDisplay (0);
@@ -101,11 +119,13 @@ namespace SuiteModulation
             scope.setBounds (area.removeFromTop (scopeHeight));
             area.removeFromTop (5);
 
-            auto shapeRow = area.removeFromTop (controlHeight);
-            auto offsetArea = shapeRow.removeFromRight (juce::roundToInt ((float) shapeRow.getWidth() * 0.5f));
-            shape.setBounds (shapeRow);
-            offsetLabel.setBounds (offsetArea.removeFromLeft (offsetLabelWidth));
-            offset.setBounds (offsetArea);
+            shape.setBounds (area.removeFromTop (controlHeight));
+            area.removeFromTop (4);
+
+            // Offset gets a full-width row, so its track is long enough to drag
+            auto offsetRow = area.removeFromTop (controlHeight);
+            offsetLabel.setBounds (offsetRow.removeFromLeft (offsetLabelWidth));
+            offset.setBounds (offsetRow);
             area.removeFromTop (4);
 
             auto row = area.removeFromTop (controlHeight);
@@ -135,7 +155,8 @@ namespace SuiteModulation
     struct ModulationPanel::SlotRow : public juce::Component
     {
         SlotRow (Router& router, int slot, const juce::StringArray& targetNames)
-            : amount (juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight)
+            : amount (juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight),
+              delay (juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight)
         {
             auto& state = router.getState();
             const auto number = juce::String (slot + 1);
@@ -145,40 +166,52 @@ namespace SuiteModulation
             amount.setTextBoxStyle (juce::Slider::TextBoxRight, false, 72, 22);
             amount.setTextValueSuffix (" %");
             amount.setNumDecimalPlacesToDisplay (0);
+            delay.setTextBoxStyle (juce::Slider::TextBoxRight, false, 72, 22);
+            delay.setTextValueSuffix (" s");
+            delay.setNumDecimalPlacesToDisplay (2);
 
             sourceAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (state, modSourceIds[(size_t) slot], source);
             targetAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (state, modTargetIds[(size_t) slot], target);
             amountAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (state, modAmountIds[(size_t) slot], amount);
+            delayAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (state, modDelayIds[(size_t) slot], delay);
+
+            delay.setComponentID (modDelayIds[(size_t) slot]);
+            delay.setWantsKeyboardFocus (true);   // arrow keys nudge the delay once the control has focus
 
             source.setHelpText ("Routing " + number + " source: which LFO drives this slot.");
             target.setHelpText ("Routing " + number + " target: the control this slot moves. None turns the slot off.");
             amount.setHelpText ("Routing " + number + " amount, from -100 % to +100 %. Negative values invert the LFO.");
+            delay.setHelpText ("Routing " + number + " delay, from 0 to 10 s. Silent until this time has passed on the delay clock, which starts when playback starts.");
 
             addAndMakeVisible (source);
             addAndMakeVisible (target);
             addAndMakeVisible (amount);
+            addAndMakeVisible (delay);
         }
 
         void resized() override
         {
             auto row = getLocalBounds().reduced (0, 1);
-            const int sourceWidth = juce::roundToInt ((float) getWidth() * sourceFraction);
-            const int targetWidth = juce::roundToInt ((float) getWidth() * targetFraction);
+            const auto columns = slotColumns (getWidth());
 
-            source.setBounds (row.removeFromLeft (sourceWidth));
+            source.setBounds (row.removeFromLeft (columns.source));
             row.removeFromLeft (gap);
-            target.setBounds (row.removeFromLeft (targetWidth));
+            target.setBounds (row.removeFromLeft (columns.target));
             row.removeFromLeft (gap);
-            amount.setBounds (row);
+            amount.setBounds (row.removeFromLeft (columns.amount));
+            row.removeFromLeft (gap);
+            delay.setBounds (row);
         }
 
         juce::ComboBox source;
         juce::ComboBox target;
         juce::Slider amount;
+        juce::Slider delay;
 
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> sourceAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> targetAttachment;
         std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> amountAttachment;
+        std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> delayAttachment;
     };
 
     //==============================================================================
@@ -249,16 +282,18 @@ namespace SuiteModulation
     {
         // The headings sit just above the routing rows and line up with their columns.
         const int headingY = lfoBlockHeight + gap;
-        const int sourceWidth = juce::roundToInt ((float) getWidth() * sourceFraction);
-        const int targetWidth = juce::roundToInt ((float) getWidth() * targetFraction);
-        const int amountX = sourceWidth + targetWidth + 2 * gap;
+        const auto columns = slotColumns (getWidth());
+        const int targetX = columns.source + gap;
+        const int amountX = targetX + columns.target + gap;
+        const int delayX = amountX + columns.amount + gap;
 
         g.setColour (style.textDim);
         g.setFont (juce::Font (12.0f, juce::Font::bold));
 
-        g.drawText ("SOURCE", juce::Rectangle<int> (0, headingY, sourceWidth, headingHeight), juce::Justification::centredLeft);
-        g.drawText ("TARGET", juce::Rectangle<int> (sourceWidth + gap, headingY, targetWidth, headingHeight), juce::Justification::centredLeft);
-        g.drawText ("AMOUNT", juce::Rectangle<int> (amountX, headingY, getWidth() - amountX, headingHeight), juce::Justification::centredLeft);
+        g.drawText ("SOURCE", juce::Rectangle<int> (0, headingY, columns.source, headingHeight), juce::Justification::centredLeft);
+        g.drawText ("TARGET", juce::Rectangle<int> (targetX, headingY, columns.target, headingHeight), juce::Justification::centredLeft);
+        g.drawText ("AMOUNT", juce::Rectangle<int> (amountX, headingY, columns.amount, headingHeight), juce::Justification::centredLeft);
+        g.drawText ("DELAY", juce::Rectangle<int> (delayX, headingY, columns.delay, headingHeight), juce::Justification::centredLeft);
     }
 
 }  // namespace SuiteModulation

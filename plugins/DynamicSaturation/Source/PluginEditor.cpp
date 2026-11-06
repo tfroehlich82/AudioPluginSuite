@@ -1,5 +1,18 @@
 #include "PluginEditor.h"
 
+#include "BinaryData.h"
+#include "SuiteBrand.h"
+
+namespace
+{
+    const juce::Image& brandLockup()
+    {
+        static const juce::Image image = juce::ImageCache::getFromMemory (BinaryData::lockup_dynamic_saturation_png,
+                                                                         BinaryData::lockup_dynamic_saturation_pngSize);
+        return image;
+    }
+}
+
 namespace
 {
     constexpr int editorWidth = 880;
@@ -98,21 +111,18 @@ void DynamicSaturationEditor::paint (juce::Graphics& g)
     g.setGradientFill (background);
     g.fillAll();
 
-    g.setColour (lookAndFeel.getAccent());
-    g.setFont (juce::Font (20.0f, juce::Font::bold));
-    g.drawText ("DYNAMIC SATURATION", getLocalBounds().reduced (16, 0).removeFromTop (30),
-                juce::Justification::centredLeft);
+    SuiteUI::drawBrandLockup (g, getLocalBounds().reduced (16, 0).removeFromTop (40), brandLockup());
 
     g.setColour (SuiteUI::Colours::textDim);
     g.setFont (juce::Font (12.0f));
     g.drawText ("2x oversampled  |  transfer curve tracks the input level",
-                getLocalBounds().reduced (16, 0).removeFromTop (30), juce::Justification::centredRight);
+                getLocalBounds().reduced (16, 0).removeFromTop (40), juce::Justification::centredRight);
 }
 
 void DynamicSaturationEditor::resized()
 {
     auto area = getLocalBounds().reduced (16);
-    area.removeFromTop (34);
+    area.removeFromTop (40);
 
     auto curveRow = area.removeFromTop ((int) ((float) area.getHeight() * 0.42f));
     inputMeter.setBounds (curveRow.removeFromRight (28).reduced (4, 6));

@@ -580,6 +580,10 @@ void MicroTimingChaosProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     }
     else
     {
+        // Delays count from the start of playback
+        if (! wasRunning)
+            modulation.restartDelayClock();
+
         wasRunning = true;
 
         const double blockStart = beatPosition;

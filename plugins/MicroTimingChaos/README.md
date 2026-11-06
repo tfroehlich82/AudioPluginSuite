@@ -82,6 +82,7 @@ Two LFOs, each with a rate, a shape and a sync switch, and six routing slots. A 
 | **Mod Source** | LFO 1, LFO 2 | LFO 1 | Which LFO drives the slot. |
 | **Mod Target** | see the list below | None | The control the slot moves. None turns the slot off. |
 | **Mod Amount** | −100 to +100 % | 0 % | How far the target moves. Negative values invert the LFO. |
+| **Mod Delay** | 0 to 10 s | 0 s | The routing stays silent until this time has passed since playback started. Each routing has its own delay. |
 
 **Targets:** Chaos, Timing Range, Velocity Chaos, Lerp, Lerp X Mult, Lerp Y Mult, Lerp Z Mult, Density, Gate, Swing, Velocity, Speed, Tempo and Seed. Tempo only moves while Host Sync is off. Rate, Length, Scale, Root Note, Octaves and Host Sync are not modulation targets.
 

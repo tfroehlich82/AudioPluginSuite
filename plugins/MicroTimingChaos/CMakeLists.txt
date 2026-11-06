@@ -36,6 +36,7 @@ juce_add_binary_data(MicroTimingChaosAssets
         Resources/textures/bpm_sync_4k.png
         Resources/textures/sequencer_bg_4k.png
         Resources/textures/sequencer_grid_4k.png
+        ../../modules/suite_ui/brand/lockup_micro_timing_chaos.png
 )
 
 target_sources(MicroTimingChaos PRIVATE ${MICRO_TIMING_CHAOS_SOURCES})

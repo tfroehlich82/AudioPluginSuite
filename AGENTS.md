@@ -52,8 +52,10 @@ modules/
     tests/SuiteModulationTests.cpp  SuiteModulationTests (9 test functions), with a stub processor
     suite_modulation.cmake        suite_modulation_add_to_target(<target>): adds sources + include dir. Needs suite_ui_add_to_target on the same target
   suite_ui/                       Shared UI. NOT a library target, see section 8
-    include/SuiteLookAndFeel.h    Colours namespace, SuiteLookAndFeel (LookAndFeel_V4)
+    include/SuiteLookAndFeel.h    SuiteUI::Colours: the neutral palette shared by all plugins, plus SuiteLookAndFeel (LookAndFeel_V4)
     include/SuiteWidgets.h        SpectrumDisplay, TrailPlot, CurveView, LevelMeter, SegmentedSelector, LabelledSlider
+    include/SuiteBrand.h          drawBrandLockup(): draws a brand lockup image at the left of a header area
+    brand/                        Generated artwork: brand_mark.png and lockup_<plugin>.png. Made by tools/brand/make_brand.py, do not edit by hand
     Source/*.cpp                  Implementations
     SuiteUI.cmake                 suite_ui_add_to_target(<target>): adds sources + include dir
     tests/SuiteUITests.cpp        SuiteUITests (9 test functions)
@@ -64,7 +66,7 @@ plugins/<Name>/
   Source/PluginEditor.{h,cpp}     Editor, 60 Hz Timer reads processor snapshots
   tests/PluginTests.cpp           Plugin tests: SpectralDrift 13, DynamicSaturation 10, MicroTimingChaos 34
 plugins/MicroTimingChaos/         Additional files:
-  MicroTimingChaosLookAndFeel.h   At the plugin root (not include/). Palette namespace and LookAndFeel
+  MicroTimingChaosLookAndFeel.h   At the plugin root (not include/). MTC-only colours (axes, LFOs, preview text); the neutrals come from SuiteUI::Colours. Plus the LookAndFeel
   Source/MicroTimingChaosLookAndFeel.cpp  Rotary knobs, BPM Sync button, combo box; textures and icons from BinaryData
   Source/LerpCurveEditor.{h,cpp}  The 5-point curve editor (Curve tab)
   Source/LerpPreview.{h,cpp}      The live drift preview (Preview tab)
@@ -151,7 +153,7 @@ Latency reported: 2048 samples (`setLatencySamples`). Tail length: 0.
 
 Latency reported: the oversampler's integer latency, computed in `prepareToPlay`. The dry path is delayed by the same amount. Tail length: 0.
 
-### 4.3 Micro-Timing Chaos Sequencer (48 parameters)
+### 4.3 Micro-Timing Chaos Sequencer (54 parameters)
 
 | ID | Name | Range | Default | Notes |
 |---|---|---|---|---|
@@ -183,6 +185,7 @@ Latency reported: the oversampler's integer latency, computed in `prepareToPlay`
 | `mod1Source` … `mod6Source` | Mod Source | LFO 1, LFO 2 | LFO 1 | Which LFO drives the slot |
 | `mod1Target` … `mod6Target` | Mod Target | the 14 targets in section 4.4 | None | Index 0 to 14. Append-only, see 4.4 |
 | `mod1Amount` … `mod6Amount` | Mod Amount | −100 – +100 % | 0 % | Signed. 0 % leaves the slot idle |
+| `mod1Delay` … `mod6Delay` | Mod Delay | 0 – 10 s, skew 0.5 | 0 s | Per routing. The slot is silent until this time has passed on the delay clock. The clock restarts when playback starts (the transition from stopped to running) and runs from `prepareToPlay` when there is no host transport |
 
 The lerp curve is **not** a parameter. It is five points (x, y) stored as the `lerpCurve` property of the APVTS state (`"x,y;x,y;..."`, four decimals). `loadLerpCurveFromState()` reads it on construction and after `setStateInformation`. The first and last x are fixed at 0 and 1. The default is `y = log10(1 + 9x)`, sampled at x = 0, 0.25, 0.5, 0.75, 1.
 

@@ -1,5 +1,8 @@
 #include "PluginEditor.h"
 
+#include "BinaryData.h"
+#include "SuiteBrand.h"
+
 namespace
 {
     namespace Palette = MicroTimingChaos::Palette;
@@ -7,7 +10,7 @@ namespace
     // The layout is designed at this size. The window is shown at two thirds of it (see setScaleFactor).
     constexpr float designScale = 2.0f / 3.0f;
     constexpr int groupTitleHeight = 26;
-    constexpr int titleBandHeight = 44;
+    constexpr int titleBandHeight = 60;
     constexpr int helpHeight = 26;
     constexpr int readoutHeight = 24;
 
@@ -21,10 +24,10 @@ namespace
 
     // Rows: 1 lerp and attractor, 2 pattern and LFO, 3 melody, chaos and transport, 4 sequencer.
     constexpr int lerpGroupHeight = 310;
-    constexpr int rowTwoHeight = 340;
+    constexpr int rowTwoHeight = 360;
     constexpr int lowerGroupHeight = 180;
     constexpr int gridMinHeight = 300;
-    constexpr int editorHeight = 1380;
+    constexpr int editorHeight = 1400;
     constexpr int minEditorHeight = titleBandHeight + 2 * groupGap + lerpGroupHeight + rowTwoHeight
                                     + lowerGroupHeight + gridMinHeight + helpHeight + 4 * groupGap;
 
@@ -93,7 +96,7 @@ namespace
     {
         label.setText (text, juce::dontSendNotification);
         label.setFont (juce::Font (13.0f, juce::Font::bold));
-        label.setColour (juce::Label::textColourId, Palette::textDim);
+        label.setColour (juce::Label::textColourId, SuiteUI::Colours::textDim);
         label.setJustificationType (juce::Justification::centred);
     }
 }
@@ -122,8 +125,8 @@ void StepGridView::paint (juce::Graphics& g)
     constexpr float numberHeight = 26.0f;
 
     // Panel: a soft vertical gradient
-    g.setGradientFill (juce::ColourGradient (Palette::panelLight, 0.0f, bounds.getY(),
-                                             Palette::panel, 0.0f, bounds.getBottom(), false));
+    g.setGradientFill (juce::ColourGradient (SuiteUI::Colours::panelLight, 0.0f, bounds.getY(),
+                                             SuiteUI::Colours::panel, 0.0f, bounds.getBottom(), false));
     g.fillRoundedRectangle (bounds, 8.0f);
 
     const auto plot = bounds.withTrimmedLeft (axisWidth).withTrimmedBottom (numberHeight).reduced (8.0f, 10.0f);
@@ -140,13 +143,15 @@ void StepGridView::paint (juce::Graphics& g)
     for (const float value : guides)
     {
         const float y = yFor (value);
-        g.setColour (value == 0.0f ? Palette::track.brighter (0.35f) : Palette::track.withAlpha (0.55f));
+        g.setColour (value == 0.0f
+            ? SuiteUI::Colours::track.brighter (0.35f)
+            : SuiteUI::Colours::track.withAlpha (0.55f));
         g.drawLine (plot.getX(), y, plot.getRight(), y, value == 0.0f ? 1.5f : 1.0f);
 
         const juce::String text = value == 0.0f
             ? juce::String ("0")
             : juce::String (value > 0.0f ? "+" : "-") + juce::String (juce::roundToInt (std::abs (value))) + " ms";
-        g.setColour (Palette::textDim);
+        g.setColour (SuiteUI::Colours::textDim);
         g.drawText (text, juce::Rectangle<float> (bounds.getX() + 4.0f, y - 10.0f, axisWidth - 8.0f, 20.0f),
                     juce::Justification::centredRight);
     }
@@ -159,7 +164,7 @@ void StepGridView::paint (juce::Graphics& g)
         const bool isPlayhead = step == playheadStep;
         const bool fires = step < (int) firing.size() && firing[(size_t) step];
 
-        g.setColour (Palette::track.withAlpha (0.35f));
+        g.setColour (SuiteUI::Colours::track.withAlpha (0.35f));
         g.drawLine (column.getX(), plot.getY(), column.getX(), plot.getBottom(), 1.0f);
 
         if (isPlayhead)
@@ -183,11 +188,11 @@ void StepGridView::paint (juce::Graphics& g)
         }
         else
         {
-            g.setColour (Palette::track.brighter (0.2f));
+            g.setColour (SuiteUI::Colours::track.brighter (0.2f));
             g.fillEllipse (column.getCentreX() - 3.0f, plot.getBottom() - 9.0f, 6.0f, 6.0f);
         }
 
-        g.setColour (isPlayhead ? accent : Palette::textDim);
+        g.setColour (isPlayhead ? accent : SuiteUI::Colours::textDim);
         g.setFont (juce::Font (14.0f, isPlayhead ? juce::Font::bold : juce::Font::plain));
         g.drawText (juce::String (step + 1),
                     juce::Rectangle<float> (column.getX(), bounds.getBottom() - numberHeight, column.getWidth(), numberHeight),
@@ -249,7 +254,7 @@ MicroTimingChaosEditor::MicroTimingChaosEditor (MicroTimingChaosProcessor& p)
     addMouseListener (&helpTracker, true);
 
     helpLabel.setFont (juce::Font (14.0f));
-    helpLabel.setColour (juce::Label::textColourId, Palette::text);
+    helpLabel.setColour (juce::Label::textColourId, SuiteUI::Colours::text);
     helpLabel.setText ("Hover a control to see what it does.", juce::dontSendNotification);
 
     readout.setJustificationType (juce::Justification::centredLeft);
@@ -257,7 +262,7 @@ MicroTimingChaosEditor::MicroTimingChaosEditor (MicroTimingChaosProcessor& p)
     readout.setFont (juce::Font (14.0f, juce::Font::bold));
 
     hostTempoLabel.setFont (juce::Font (13.0f, juce::Font::bold));
-    hostTempoLabel.setColour (juce::Label::textColourId, Palette::textDim);
+    hostTempoLabel.setColour (juce::Label::textColourId, SuiteUI::Colours::textDim);
     hostTempoLabel.setJustificationType (juce::Justification::centred);
 
     styleCaption (scaleCaption, "SCALE");
@@ -432,28 +437,36 @@ void MicroTimingChaosEditor::setScaleFactor (float newScale)
     AudioProcessorEditor::setScaleFactor (newScale * designScale);
 }
 
+namespace
+{
+    const juce::Image& brandLockup()
+    {
+        static const juce::Image image = juce::ImageCache::getFromMemory (BinaryData::lockup_micro_timing_chaos_png,
+                                                                         BinaryData::lockup_micro_timing_chaos_pngSize);
+        return image;
+    }
+}
+
 void MicroTimingChaosEditor::paint (juce::Graphics& g)
 {
     lookAndFeel.paint (g, *this);
 
     // Title band: a flat background, so the grid texture does not run through the title
-    g.setColour (Palette::background);
+    g.setColour (SuiteUI::Colours::background);
     g.fillRect (0, 0, getWidth(), titleBandHeight);
 
     const auto header = getLocalBounds().reduced (groupGap, 0).removeFromTop (titleBandHeight - 8).toFloat();
 
-    g.setColour (lookAndFeel.getAccent());
-    g.setFont (juce::Font (26.0f, juce::Font::bold));
-    g.drawText ("MICRO-TIMING CHAOS", header, juce::Justification::centredLeft);
+    SuiteUI::drawBrandLockup (g, header.toNearestInt(), brandLockup());
 
     // Every group title has the same colour and size.
     for (const auto& group : groups)
     {
         const auto bounds = group.bounds.toFloat();
 
-        g.setColour (Palette::panel.withAlpha (0.55f));
+        g.setColour (SuiteUI::Colours::panel.withAlpha (0.55f));
         g.fillRoundedRectangle (bounds, 8.0f);
-        g.setColour (Palette::track);
+        g.setColour (SuiteUI::Colours::track);
         g.drawRoundedRectangle (bounds, 8.0f, 1.0f);
 
         g.setColour (lookAndFeel.getAccent());
@@ -567,7 +580,8 @@ SuiteModulation::ModulationPanel::Style MicroTimingChaosEditor::modulationStyle(
     namespace Palette = MicroTimingChaos::Palette;
 
     return { { Palette::lfo1, Palette::lfo2 },
-             Palette::text, Palette::textDim, Palette::panel, Palette::track };
+             SuiteUI::Colours::text, SuiteUI::Colours::textDim,
+             SuiteUI::Colours::panel, SuiteUI::Colours::track };
 }
 
 void MicroTimingChaosEditor::timerCallback()

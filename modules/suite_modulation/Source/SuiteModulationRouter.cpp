@@ -17,6 +17,7 @@ namespace SuiteModulation
         constexpr std::array<const char*, Router::slotCount> modSourceIds { "mod1Source", "mod2Source", "mod3Source", "mod4Source", "mod5Source", "mod6Source" };
         constexpr std::array<const char*, Router::slotCount> modTargetIds { "mod1Target", "mod2Target", "mod3Target", "mod4Target", "mod5Target", "mod6Target" };
         constexpr std::array<const char*, Router::slotCount> modAmountIds { "mod1Amount", "mod2Amount", "mod3Amount", "mod4Amount", "mod5Amount", "mod6Amount" };
+        constexpr std::array<const char*, Router::slotCount> modDelayIds { "mod1Delay", "mod2Delay", "mod3Delay", "mod4Delay", "mod5Delay", "mod6Delay" };
 
         juce::NormalisableRange<float> logRange(float start, float end)
         {
@@ -79,6 +80,11 @@ namespace SuiteModulation
             params.push_back(std::make_unique<juce::AudioParameterFloat>(
                 juce::ParameterID { modAmountIds[(size_t) slot], 1 }, "Mod " + number + " Amount",
                 juce::NormalisableRange<float>(-100.0f, 100.0f, 0.1f), 0.0f, "%"));
+
+            // Delay: this routing starts after the given time on the delay clock. Skewed so short delays are easy to set.
+            params.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { modDelayIds[(size_t) slot], 1 }, "Mod " + number + " Delay",
+                juce::NormalisableRange<float>(0.0f, 10.0f, 0.01f, 0.5f), 0.0f, "s"));
         }
     }
 
@@ -101,6 +107,7 @@ namespace SuiteModulation
             modSource[(size_t) slot] = apvts.getRawParameterValue(modSourceIds[(size_t) slot]);
             modTarget[(size_t) slot] = apvts.getRawParameterValue(modTargetIds[(size_t) slot]);
             modAmount[(size_t) slot] = apvts.getRawParameterValue(modAmountIds[(size_t) slot]);
+            modDelay[(size_t) slot] = apvts.getRawParameterValue(modDelayIds[(size_t) slot]);
         }
 
         targetParams[0] = nullptr;
@@ -123,6 +130,12 @@ namespace SuiteModulation
     {
         sampleRate = newSampleRate;
         lfoCycles = {};
+        delayClockSamples = 0.0;
+    }
+
+    void Router::restartDelayClock() noexcept
+    {
+        delayClockSamples = 0.0;
     }
 
     double Router::lfoCyclesAt(int lfo, double timeSamples, double beat, double blockStartSample) const
@@ -152,6 +165,11 @@ namespace SuiteModulation
 
             const int target = juce::roundToInt(modTarget[index]->load());
             if (target <= 0 || target > targetCount)
+                continue;
+
+            // Delay: silent until the delay clock reaches this routing's delay.
+            const double secondsOnClock = (delayClockSamples + (timeSamples - blockStartSample)) / sampleRate;
+            if (secondsOnClock < (double) modDelay[index]->load())
                 continue;
 
             const int source = clampedChoice(modSource[index]->load(), lfoCount);
@@ -186,6 +204,8 @@ namespace SuiteModulation
 
     void Router::advanceBlock(int numSamples)
     {
+        delayClockSamples += numSamples;
+
         for (int lfo = 0; lfo < lfoCount; ++lfo)
         {
             // Synced LFOs follow the beat, so they are not counted here.

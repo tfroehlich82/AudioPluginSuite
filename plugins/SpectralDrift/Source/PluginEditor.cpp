@@ -1,5 +1,18 @@
 #include "PluginEditor.h"
 
+#include "BinaryData.h"
+#include "SuiteBrand.h"
+
+namespace
+{
+    const juce::Image& brandLockup()
+    {
+        static const juce::Image image = juce::ImageCache::getFromMemory (BinaryData::lockup_spectral_drift_png,
+                                                                         BinaryData::lockup_spectral_drift_pngSize);
+        return image;
+    }
+}
+
 namespace
 {
     constexpr int editorWidth = 780;
@@ -114,21 +127,18 @@ void SpectralDriftEditor::paint (juce::Graphics& g)
     g.setGradientFill (background);
     g.fillAll();
 
-    g.setColour (lookAndFeel.getAccent());
-    g.setFont (juce::Font (20.0f, juce::Font::bold));
-    g.drawText ("SPECTRAL DRIFT", getLocalBounds().reduced (16, 0).removeFromTop (30),
-                juce::Justification::centredLeft);
+    SuiteUI::drawBrandLockup (g, getLocalBounds().reduced (16, 0).removeFromTop (40), brandLockup());
 
     g.setColour (SuiteUI::Colours::textDim);
     g.setFont (juce::Font (12.0f));
-    g.drawText ("FFT 2048 / 75 % overlap / 2048 samples latency", getLocalBounds().reduced (16, 0).removeFromTop (30),
+    g.drawText ("FFT 2048 / 75 % overlap / 2048 samples latency", getLocalBounds().reduced (16, 0).removeFromTop (40),
                 juce::Justification::centredRight);
 }
 
 void SpectralDriftEditor::resized()
 {
     auto area = getLocalBounds().reduced (16);
-    area.removeFromTop (34);
+    area.removeFromTop (40);
 
     spectrum.setBounds (area.removeFromTop ((int) ((float) area.getHeight() * 0.34f)));
     area.removeFromTop (8);

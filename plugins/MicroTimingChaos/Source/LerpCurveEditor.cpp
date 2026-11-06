@@ -98,11 +98,11 @@ void LerpCurveEditor::paint (juce::Graphics& g)
     const auto area = plotArea();
     const auto accent = Palette::velocity;
 
-    g.setColour (Palette::panel);
+    g.setColour (SuiteUI::Colours::panel);
     g.fillRoundedRectangle (bounds, 6.0f);
 
     // Grid
-    g.setColour (Palette::track.withAlpha (0.6f));
+    g.setColour (SuiteUI::Colours::track.withAlpha (0.6f));
     for (int i = 0; i <= 4; ++i)
     {
         const float fraction = (float) i / 4.0f;
@@ -114,7 +114,7 @@ void LerpCurveEditor::paint (juce::Graphics& g)
     const float dashes[] = { 4.0f, 4.0f };
     juce::Path dashed;
     juce::PathStrokeType (1.0f).createDashedStroke (dashed, curvePath (true), dashes, 2);
-    g.setColour (Palette::textDim.withAlpha (0.4f));
+    g.setColour (SuiteUI::Colours::textDim.withAlpha (0.4f));
     g.fillPath (dashed);
 
     // Curve: filled area, glow and line
@@ -139,7 +139,7 @@ void LerpCurveEditor::paint (juce::Graphics& g)
     const float driftNow = processor.evaluateLerpCurve (chaosValue);
     const auto markerPoint = toPlot ({ chaosValue, driftNow });
 
-    g.setColour (Palette::text.withAlpha (0.25f));
+    g.setColour (SuiteUI::Colours::text.withAlpha (0.25f));
     g.drawLine (markerX, area.getY(), markerX, area.getBottom(), 1.0f);
     g.setColour (accent);
     g.fillEllipse (markerPoint.x - 4.0f, markerPoint.y - 4.0f, 8.0f, 8.0f);
@@ -152,10 +152,10 @@ void LerpCurveEditor::paint (juce::Graphics& g)
         const bool highlighted = i == activePoint || i == hoverPoint;
         const float radius = highlighted ? pointRadius * 1.35f : pointRadius;
 
-        g.setColour (Palette::panel);
+        g.setColour (SuiteUI::Colours::panel);
         g.fillEllipse (p.x - radius, p.y - radius, radius * 2.0f, radius * 2.0f);
 
-        g.setColour (highlighted ? Palette::text : accent);
+        g.setColour (highlighted ? SuiteUI::Colours::text : accent);
         g.drawEllipse (p.x - radius, p.y - radius, radius * 2.0f, radius * 2.0f, 2.0f);
     }
 

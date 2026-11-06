@@ -23,8 +23,14 @@ target_sources(SpectralDrift PRIVATE
 
 suite_ui_add_to_target(SpectralDrift)
 
+# The brand lockup (FROTH Audio wordmark, mark and the product name) is embedded, so the header loads it from inside the plugin.
+juce_add_binary_data(SpectralDriftAssets
+    SOURCES ../../modules/suite_ui/brand/lockup_spectral_drift.png
+)
+
 target_link_libraries(SpectralDrift PRIVATE
     CoreDSP
+    SpectralDriftAssets
     juce::juce_audio_utils
     juce::juce_audio_processors
     juce::juce_gui_basics
@@ -49,6 +55,7 @@ if(SUITE_BUILD_TESTS)
 
     target_link_libraries(SpectralDriftTests PRIVATE
         CoreDSP
+        SpectralDriftAssets
         juce::juce_audio_utils
         juce::juce_audio_processors
         juce::juce_gui_basics

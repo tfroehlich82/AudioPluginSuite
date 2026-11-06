@@ -44,7 +44,7 @@ namespace
         g.setFont (juce::Font (13.0f, juce::Font::bold));
         g.drawText (label, labelArea, juce::Justification::centredLeft);
 
-        g.setColour (Palette::track);
+        g.setColour (SuiteUI::Colours::track);
         g.fillRoundedRectangle (row.reduced (0.0f, 6.0f), 3.0f);
 
         g.setColour (colour);
@@ -76,7 +76,7 @@ void LerpPreview::paint (juce::Graphics& g)
 {
     const auto bounds = getLocalBounds().toFloat();
 
-    g.setColour (Palette::panel);
+    g.setColour (SuiteUI::Colours::panel);
     g.fillRoundedRectangle (bounds, 6.0f);
 
     auto area = bounds.reduced (12.0f, 10.0f);
@@ -109,7 +109,7 @@ void LerpPreview::paint (juce::Graphics& g)
 
         auto plot = laneArea.withTrimmedLeft (laneLabelWidth);
 
-        g.setColour (Palette::track.withAlpha (0.35f));
+        g.setColour (SuiteUI::Colours::track.withAlpha (0.35f));
         g.fillRoundedRectangle (plot, 4.0f);
 
         g.setColour (Palette::previewText);
@@ -118,7 +118,7 @@ void LerpPreview::paint (juce::Graphics& g)
 
         if (lane == 0)
         {
-            g.setColour (Palette::track);
+            g.setColour (SuiteUI::Colours::track);
             g.drawHorizontalLine ((int) plot.getCentreY(), plot.getX(), plot.getRight());
         }
 

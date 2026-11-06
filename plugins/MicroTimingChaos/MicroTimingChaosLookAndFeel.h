@@ -1,18 +1,13 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include "SuiteLookAndFeel.h"
 
 namespace MicroTimingChaos
 {
-    /** Colours of the interface: dark and flat, with neon accents. Each drift axis has its own colour. */
+    /** MTC-specific colours. The neutral palette is `SuiteUI::Colours`. */
     namespace Palette
     {
-        inline const juce::Colour background { 0xff0b0e13 };
-        inline const juce::Colour panel      { 0xff151a22 };
-        inline const juce::Colour panelLight { 0xff1f2631 };
-        inline const juce::Colour track      { 0xff2a3240 };
-        inline const juce::Colour text       { 0xffdde4ee };
-        inline const juce::Colour textDim    { 0xff7d8899 };
         inline const juce::Colour previewText { 0xffffffff };  // white: all text in the Lerp curve and preview panels
 
         inline const juce::Colour timing     { 0xff2de2ff };  // cyan: X, timing

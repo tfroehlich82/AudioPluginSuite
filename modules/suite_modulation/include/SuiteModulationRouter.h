@@ -100,6 +100,12 @@ namespace SuiteModulation
         /** The shape choice index of an LFO, read from the state. */
         int getLfoShape(int lfo) const noexcept;
 
+        /**
+            Restarts the delay clock. A routing with a Delay contributes nothing until that many seconds have
+            passed on this clock. Call when playback starts. Audio thread.
+        */
+        void restartDelayClock() noexcept;
+
         /** The routing parameter for a target choice (nullptr for None). */
         juce::RangedAudioParameter* targetParameter(int targetIndex) const noexcept;
 
@@ -115,11 +121,12 @@ namespace SuiteModulation
 
         // Read-only raw values, looked up once in the constructor
         std::array<std::atomic<float>*, lfoCount> lfoRate {}, lfoShape {}, lfoSync {}, lfoDivision {};
-        std::array<std::atomic<float>*, slotCount> modSource {}, modTarget {}, modAmount {};
+        std::array<std::atomic<float>*, slotCount> modSource {}, modTarget {}, modAmount {}, modDelay {};
         std::atomic<float>* hostSync = nullptr;
 
         double sampleRate = 44100.0;
         std::array<double, lfoCount> lfoCycles {};  // free LFOs: cycles counted at the start of the block
+        double delayClockSamples = 0.0;             // samples since the delay clock started, at the start of the block
 
         double lfoCyclesAt(int lfo, double timeSamples, double beat, double blockStartSample) const;
 
