@@ -75,7 +75,7 @@ Two LFOs, each with a rate, a shape and a sync switch, and six routing slots. A 
 | Control | Range | Default | Description |
 |---|---|---|---|
 | **LFO Rate** | 0.02 – 20 Hz (logarithmic) | 0.25 Hz | How fast the LFO cycles. Disabled while its Sync is on. |
-| **LFO Shape** | Sine, Triangle, Saw, Square, Sample & Hold, Random, Noise | Sine | The waveform. Sample & Hold picks a new random level on each cycle. |
+| **LFO Shape** | Sine, Triangle, Saw, Square, Sample & Hold, Random, Noise | Sine | The waveform. Sample & Hold picks a new random level on each cycle. Random glides between random levels. Noise jumps between uncorrelated levels. Neither repeats, and the scope shows their recent history. |
 | **LFO Sync** | on / off | off | Locks the LFO to musical time. |
 | **LFO Division** | 4 bars, 2 bars, 1 bar, 1/2, 1/4, 1/8, 1/16 | 1/4 | The cycle length while synced. |
 | **LFO Offset** | −100 % to +100 % | 0 % | Moves the LFO up or down before it is routed. The output stops at −1 and +1. |

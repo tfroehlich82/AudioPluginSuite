@@ -5,6 +5,7 @@
 #include "PluginProcessor.h"
 
 #include "BinaryData.h"
+#include "SuiteModulationScope.h"
 
 #include <map>
 #include <set>
@@ -925,12 +926,18 @@ namespace
         Processor processor;
         processor.prepareToPlay (sampleRate, blockSize);
 
+        // The Offset starts at zero, before and after the editor is built. Each step has its own check, so a failure names the step.
+        assert (getParameter (processor.apvts, Processor::lfo1OffsetId) == 0.0f);
+
         std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditorAndMakeActive());
         assert (editor != nullptr);
+        assert (getParameter (processor.apvts, Processor::lfo1OffsetId) == 0.0f);
+
         // Not in a window, so the editor is made visible by hand; hit testing ignores hidden components.
         editor->setVisible (true);
         editor->setSize (editor->getWidth(), editor->getHeight());
         editor->resized();
+        assert (getParameter (processor.apvts, Processor::lfo1OffsetId) == 0.0f);
 
         auto* slider = dynamic_cast<juce::Slider*> (findComponent (*editor, Processor::lfo1OffsetId));
         assert (slider != nullptr);
@@ -1005,6 +1012,26 @@ namespace
         assert (delayed <= (int64_t) (0.5 * sampleRate) + 2 * blockSize);  // and not long after it
 
         pass ("testRoutingDelay");
+    }
+
+    // The scope's dot is read from the curve itself, so it follows a change of shape or Offset even before audio runs.
+    void testScopeDotFollowsCurve()
+    {
+        Processor processor;
+        setLfo (processor, 0, 1.0f, 0.0f, false, 4.0f);                 // sine, no audio processed yet
+        processor.prepareToPlay (sampleRate, blockSize);
+
+        SuiteModulation::LfoScope scope (processor.getRouter(), 0, juce::Colours::orange, juce::Colours::black, juce::Colours::grey);
+        assert (std::abs (scope.curveValue (0.25f) - 1.0f) < 1e-5f);
+
+        setParameter (processor.apvts, Processor::lfo1OffsetId, -40.0f);   // the curve moves at once
+        assert (std::abs (scope.curveValue (0.25f) - 0.6f) < 1e-5f);
+
+        setParameter (processor.apvts, Processor::lfo1ShapeId, 3.0f);      // square: +1 before the half cycle, -1 after
+        assert (std::abs (scope.curveValue (0.25f) - 0.6f) < 1e-5f);
+        assert (std::abs (scope.curveValue (0.75f) + 1.0f) < 1e-5f);
+
+        pass ("testScopeDotFollowsCurve");
     }
 
     // The brand lockup is embedded in the binary and decodes to a wide image, so the header has something to draw.
@@ -1350,6 +1377,7 @@ int main()
     testOffsetControlIsUsable();
     testRoutingDelay();
     testBrandLockupLoads();
+    testScopeDotFollowsCurve();
     testSineOnTimingRangeChangesOffsets();
     testBipolarAmountInvertsModulation();
     testSyncedLfoFollowsBeats();

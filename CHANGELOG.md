@@ -35,6 +35,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 - Micro-Timing Chaos: the neutral colours now come from `SuiteUI::Colours`. The plugin palette keeps only its own axis, LFO and preview colours. No visual change.
+- Micro-Timing Chaos: Random and Noise are now real random signals. Random has eight random levels per cycle, joined by straight lines. Noise jumps between uncorrelated levels, 32 per cycle. Neither repeats from one cycle to the next. The scope shows Sample & Hold, Random and Noise as a scrolling history of the output, not one cycle. Saved sessions that use these two shapes sound different.
 - Micro-Timing Chaos: the LFO block is taller (140 px) to hold the Offset row, the LFO group is 360 px, and the editor is 1400 px high. The title band is 60 px.
 - SpectralDrift and DynamicSaturation: the title row is 40 px, and the content below it moved down by 6 px.
 - Micro-Timing Chaos: a new **LFO Offset** control for each LFO, −100 % to +100 %, default 0 %. It moves the waveform up or down before routing, and the output stops at −1 and +1. It sits on the LFO's shape row. The scope curve shows the offset too. Two parameters were added (`lfo1Offset`, `lfo2Offset`); at 0 % the output is unchanged.

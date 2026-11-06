@@ -27,21 +27,11 @@ namespace CoreDSP::Modulation
         count
     };
 
-    /**
-     * Smooth value noise: a random value at each integer lattice point, joined with a smoothstep curve.
-     * The lattice position x is in cycles (or any unit), so the curve is continuous everywhere. Output in [-1, 1].
-     */
-    inline float smoothNoise (std::uint32_t seed, double x) noexcept
+    /** An independent random level in [-1, 1] for one grid point. Every grid point, in every cycle, gets its own level. */
+    inline float gridLevel (std::uint32_t seed, double gridPoint) noexcept
     {
-        const double cell = std::floor (x);
-        const double t = x - cell;
-        const double fade = t * t * (3.0 - 2.0 * t);
-        const auto index = static_cast<std::uint32_t> (static_cast<std::int64_t> (cell));
-
-        const float a = 2.0f * CoreDSP::Sequencer::hashUnit (seed, index) - 1.0f;
-        const float b = 2.0f * CoreDSP::Sequencer::hashUnit (seed, index + 1u) - 1.0f;
-
-        return a + (b - a) * (float) fade;
+        const auto index = static_cast<std::uint32_t> (static_cast<std::int64_t> (gridPoint));
+        return 2.0f * CoreDSP::Sequencer::hashUnit (seed, index) - 1.0f;
     }
 
     /**
@@ -50,10 +40,11 @@ namespace CoreDSP::Modulation
      * Sine: sin(2 pi p). Triangle: 1 - 4|p - 0.5|, starting at -1. Saw: 2p - 1, rising.
      * Square: +1 for p < 0.5, otherwise -1.
      * Sample and hold: one random level per cycle, held until the next cycle.
-     * Random: a smooth random curve, with two random points per cycle, so it sweeps up and down.
-     * Noise: smooth fractal noise, three layers of random curves (8, 16 and 32 points per cycle, at
-     * half the strength each), for an organic, irregular movement.
-     * Here p is the fractional part of the cycle count.
+     * Random: eight grid points per cycle, each with its own random level, joined by straight lines. It
+     * wanders without repeating, and each cycle has a different shape.
+     * Noise: thirty-two uncorrelated random levels per cycle, each held until the next. There is no
+     * shape to see, only the randomness, so it moves like noise.
+     * Both shapes use the cycle count as a time axis, so they do not repeat. Here p is the fractional part of the cycle count.
      */
     inline float lfoValue (LfoShape shape, double cycles, std::uint32_t seed) noexcept
     {
@@ -81,23 +72,17 @@ namespace CoreDSP::Modulation
             }
 
             case LfoShape::random:
-                return smoothNoise (seed, cycles * 2.0);
+            {
+                const double position = cycles * 8.0;
+                const double cell = std::floor (position);
+                const float t = (float) (position - cell);
+                const float a = gridLevel (seed, cell);
+                const float b = gridLevel (seed, cell + 1.0);
+                return a + (b - a) * t;
+            }
 
             case LfoShape::noise:
-            {
-                float sum = 0.0f;
-                float strength = 1.0f;
-                float total = 0.0f;
-
-                for (int layer = 0; layer < 3; ++layer)
-                {
-                    sum += strength * smoothNoise (seed + 0x9E37u * (std::uint32_t) layer, cycles * 8.0 * (double) (1 << layer));
-                    total += strength;
-                    strength *= 0.5f;
-                }
-
-                return sum / total;
-            }
+                return gridLevel (seed + 0x9E37u, std::floor (cycles * 32.0));
 
             case LfoShape::count:
                 break;

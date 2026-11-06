@@ -841,21 +841,48 @@ namespace
         assert (std::abs (Mod::modulatedNormalised (-0.5f, 0.6f) - 0.1f) < 1e-6f);
         assert (Mod::modulatedNormalised (-0.5f, -0.6f) == 0.0f);
 
-        // Random and Noise are smooth curves that vary: no jumps between neighbouring samples, and real movement.
-        for (const auto shape : { Mod::LfoShape::random, Mod::LfoShape::noise })
+        // Random wanders: continuous (straight lines between grid points), varies across the range, and never repeats.
         {
             double sum = 0.0, sumSquares = 0.0;
-            float previous = Mod::lfoValue (shape, 0.0, seed);
+            float previous = Mod::lfoValue (Mod::LfoShape::random, 0.0, seed);
             for (int i = 1; i <= 4000; ++i)
             {
-                const float value = Mod::lfoValue (shape, i * 0.001, seed);
-                assert (std::abs (value - previous) < 0.05f);   // continuous: no jumps
+                const float value = Mod::lfoValue (Mod::LfoShape::random, i * 0.001, seed);
+                assert (std::abs (value - previous) < 0.05f);
                 previous = value;
                 sum += value;
                 sumSquares += (double) value * value;
             }
             const double mean = sum / 4000.0;
-            assert (std::sqrt (sumSquares / 4000.0 - mean * mean) > 0.2);   // varies across the range
+            assert (std::sqrt (sumSquares / 4000.0 - mean * mean) > 0.2);
+        }
+
+        // Noise is random from one level to the next: neighbouring levels differ by about a third of the range on average
+        // (uniform random levels differ by 2/3 on average), and the spread is that of uniform levels (variance 1/3).
+        {
+            double sum = 0.0, sumSquares = 0.0, sumJumps = 0.0;
+            float previous = Mod::lfoValue (Mod::LfoShape::noise, 0.5 / 32.0, seed);
+            for (int i = 1; i <= 2000; ++i)
+            {
+                const float value = Mod::lfoValue (Mod::LfoShape::noise, (i + 0.5) / 32.0, seed);
+                sumJumps += std::abs (value - previous);
+                previous = value;
+                sum += value;
+                sumSquares += (double) value * value;
+            }
+            const double mean = sum / 2000.0;
+            assert (sumJumps / 2000.0 > 0.5);
+            assert (std::abs (sumSquares / 2000.0 - mean * mean - 1.0 / 3.0) < 0.05);
+        }
+
+        // Neither random shape repeats a cycle: a whole cycle later the level is different.
+        for (const auto shape : { Mod::LfoShape::random, Mod::LfoShape::noise })
+        {
+            int different = 0;
+            for (int k = 0; k < 8; ++k)
+                if (std::abs (Mod::lfoValue (shape, 0.3 + k, seed) - Mod::lfoValue (shape, 0.3 + k + 1.0, seed)) > 1e-4f)
+                    ++different;
+            assert (different >= 7);
         }
 
         std::puts ("[PASS] testModulationShapes");
