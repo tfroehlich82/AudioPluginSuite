@@ -40,7 +40,7 @@ namespace
         auto labelArea = row.removeFromLeft (laneLabelWidth);
         auto valueArea = row.removeFromRight (60.0f);
 
-        g.setColour (Palette::textDim);
+        g.setColour (Palette::previewText);
         g.setFont (juce::Font (13.0f, juce::Font::bold));
         g.drawText (label, labelArea, juce::Justification::centredLeft);
 
@@ -50,7 +50,7 @@ namespace
         g.setColour (colour);
         g.fillRoundedRectangle (row.reduced (0.0f, 6.0f).withWidth (row.getWidth() * juce::jlimit (0.0f, 1.0f, amount)), 3.0f);
 
-        g.setColour (Palette::text);
+        g.setColour (Palette::previewText);
         g.setFont (juce::Font (13.0f));
         g.drawText (juce::String (juce::roundToInt (amount * 100.0f)) + " %", valueArea, juce::Justification::centredRight);
     }
@@ -93,7 +93,7 @@ void LerpPreview::paint (juce::Graphics& g)
     auto caption = area.removeFromBottom (14.0f);
     area.removeFromBottom (4.0f);
 
-    g.setColour (Palette::textDim);
+    g.setColour (Palette::previewText);
     g.setFont (juce::Font (11.0f));
     g.drawText ("LAST " + juce::String ((int) steps.size()) + " STEPS, OLDEST LEFT", caption, juce::Justification::centredLeft);
 
@@ -112,7 +112,7 @@ void LerpPreview::paint (juce::Graphics& g)
         g.setColour (Palette::track.withAlpha (0.35f));
         g.fillRoundedRectangle (plot, 4.0f);
 
-        g.setColour (Palette::textDim.withAlpha (0.6f));
+        g.setColour (Palette::previewText);
         g.setFont (juce::Font (11.0f));
         g.drawText (laneLabels[lane], laneArea.withWidth (laneLabelWidth - 8.0f), juce::Justification::centredLeft);
 

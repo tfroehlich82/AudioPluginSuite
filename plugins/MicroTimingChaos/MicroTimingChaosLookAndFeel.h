@@ -13,6 +13,7 @@ namespace MicroTimingChaos
         inline const juce::Colour track      { 0xff2a3240 };
         inline const juce::Colour text       { 0xffdde4ee };
         inline const juce::Colour textDim    { 0xff7d8899 };
+        inline const juce::Colour previewText { 0xffffffff };  // white: all text in the Lerp curve and preview panels
 
         inline const juce::Colour timing     { 0xff2de2ff };  // cyan: X, timing
         inline const juce::Colour pitch      { 0xffff9f1c };  // amber: Y, pitch and gate
