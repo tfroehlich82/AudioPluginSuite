@@ -890,6 +890,28 @@ namespace
         std::puts ("[PASS] testSampleAndHold");
     }
 
+    // The division table keeps its saved order, out-of-range indices clamp, and fractionalPart wraps negatives.
+    void testModulationTiming()
+    {
+        using namespace CoreDSP::Modulation;
+
+        const double expected[7] = { 16.0, 8.0, 4.0, 2.0, 1.0, 0.5, 0.25 };
+        for (int i = 0; i < 7; ++i)
+            assert (divisionBeats[i] == expected[i]);
+
+        assert (divisionToBeats (-3) == 16.0);
+        assert (divisionToBeats (4) == 1.0);
+        assert (divisionToBeats (99) == 0.25);
+
+        assert (fractionalPart (2.25) == 0.25);
+        assert (std::abs (fractionalPart (-0.25) - 0.75) < 1e-12);
+        assert (fractionalPart (-2.0) == 0.0);
+
+        assert (cyclesFromSeconds (2.0, 0.5) == 1.0);
+
+        std::puts ("[PASS] testModulationTiming");
+    }
+
 int main()
 {
     std::puts ("Running CoreDSP unit tests...");
@@ -922,6 +944,7 @@ int main()
     testTimingSwingGateVelocity();
     testModulationShapes();
     testSampleAndHold();
+    testModulationTiming();
 
     std::puts ("All CoreDSP unit tests passed.");
     return 0;

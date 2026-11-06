@@ -10,7 +10,7 @@ The original brief (`coding_agent_prompt.md`) is no longer in the repository. Se
 
 ## 1. What this project is
 
-Three audio plugins written with JUCE 7.0.9 in C++17. Formats: VST3 on Windows and macOS, Audio Unit on macOS, and Standalone on both.
+Three audio plugins written with JUCE 9.0.5 in C++17. Formats: VST3 on Windows and macOS, Audio Unit on macOS, and Standalone on both.
 
 | Plugin | Folder | Kind | DSP core | Editor accent |
 |---|---|---|---|---|
@@ -40,8 +40,17 @@ modules/
     include/SpectralEngine.h      DriftEngine (overlap-add FFT), LfoShape, lfoValue()
     include/SequencerEngine.h     CoreDSP::Sequencer: step rates, hashed pattern and melody, timing, swing, gate, velocity
     include/ModulationEngine.h    CoreDSP::Modulation: LFO shapes (cycles in, value in [-1, 1]) and the normalised offset clamp
-    tests/DSPTests.cpp            CoreDSPTests (28 test functions)
+    include/ModulationTiming.h    CoreDSP::Modulation: division table (beats per cycle), fractionalPart, cyclesFromSeconds
+    tests/DSPTests.cpp            CoreDSPTests (29 test functions)
     CMakeLists.txt                CoreDSP INTERFACE target, CoreDSPTests
+  suite_modulation/               Shared LFOs, routing slots, LFO scope, modulation panel, control display. NOT a library target, see section 8.
+    include/SuiteModulationRouter.h   Router: LFO and slot parameters (addParameters), state, offsets, modulate(), publish
+    include/SuiteModulationScope.h    LfoScope: one LFO cycle with the current position
+    include/SuiteModulationPanel.h    ModulationPanel: LFO strips and the six routing rows (uses SuiteUI::LabelledSlider)
+    include/SuiteModulationControls.h ControlDisplay: shows modulated values on sliders, skips the one under the mouse
+    Source/*.cpp                  Implementations
+    tests/SuiteModulationTests.cpp  SuiteModulationTests (9 test functions), with a stub processor
+    suite_modulation.cmake        suite_modulation_add_to_target(<target>): adds sources + include dir. Needs suite_ui_add_to_target on the same target
   suite_ui/                       Shared UI. NOT a library target, see section 8
     include/SuiteLookAndFeel.h    Colours namespace, SuiteLookAndFeel (LookAndFeel_V4)
     include/SuiteWidgets.h        SpectrumDisplay, TrailPlot, CurveView, LevelMeter, SegmentedSelector, LabelledSlider
@@ -53,14 +62,13 @@ plugins/<Name>/
   CMakeLists.txt                  juce_add_plugin, links, <Name>Tests executable, add_test
   Source/PluginProcessor.{h,cpp}  APVTS, processing, state, createPluginFilter()
   Source/PluginEditor.{h,cpp}     Editor, 60 Hz Timer reads processor snapshots
-  tests/PluginTests.cpp           Plugin tests: SpectralDrift 13, DynamicSaturation 10, MicroTimingChaos 33
+  tests/PluginTests.cpp           Plugin tests: SpectralDrift 13, DynamicSaturation 10, MicroTimingChaos 34
 plugins/MicroTimingChaos/         Additional files:
   MicroTimingChaosLookAndFeel.h   At the plugin root (not include/). Palette namespace and LookAndFeel
   Source/MicroTimingChaosLookAndFeel.cpp  Rotary knobs, BPM Sync button, combo box; textures and icons from BinaryData
   Source/LerpCurveEditor.{h,cpp}  The 5-point curve editor (Curve tab)
   Source/LerpPreview.{h,cpp}      The live drift preview (Preview tab)
-  Source/LfoScope.{h,cpp}         One cycle of an LFO shape, with a dot at its current position
-  Source/ModulationPanel.{h,cpp}  The two LFO strips and the six routing slots (bottom of the left column)
+  The LFO panel and scope are in modules/suite_modulation. The plugin's own copies were removed.
   Resources/icons/*.svg           BPM Sync icons, embedded in the binary
   Resources/textures/*.png        4K textures, embedded and scaled down at load
   generate_texture.py, make_png.py  Scripts that produced the textures (owner's tools)
@@ -94,7 +102,7 @@ $CM = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonE
 - JUCE is fetched by `FetchContent` into `build/_deps/juce-src`. That directory is a full local copy: grep it to check any API before using it.
 - Asset embedding: `juce_add_binary_data(MicroTimingChaosAssets ...)` builds a `BinaryData` target that the plugin and its test executable link. Add new icons or textures to its `SOURCES` list, then reference them by the generated name (`file_name_with_underscores`, for example `bpm_sync_active_svg`).
 
-Last verified status (2026-11-03): full Release build succeeds on Windows. All 8 CTest entries pass: CoreDSPTests, SuiteUI_Tests, the three plugin test executables, and the three VST3 host-load tests.
+Last verified status (2026-11-06): JUCE 9.0.5. Full Release build succeeds on Windows. All 9 CTest entries pass: CoreDSPTests, SuiteUI_Tests, SuiteModulation_Tests, the three plugin test executables, and the three VST3 host-load tests. SuiteUI_Tests also passes against JUCE 8.0.6, the previous pin, which is the version CI ran. macOS is not verified on JUCE 9.
 
 ---
 
@@ -185,6 +193,8 @@ Latency reported: 50 ms fixed (`maxTimingRangeMs`, 2400 samples at 48 kHz), rega
 
 Two LFOs and six routing slots. A slot adds `amount × LFO value` to its target, in the target's normalised range (0 to 1 across the parameter's range, so log and bipolar ranges behave the same). The result is clamped to [0, 1], and converted back with the parameter's own `convertFrom0to1`. With no slot aimed at a target, the base value is returned exactly, which is what keeps the committed output unchanged at the defaults.
 
+The LFO and routing parameters are created by `SuiteModulation::Router::addParameters`, which every plugin that uses modulation calls. The target table is per plugin: the plugin passes its own `TargetInfo` list to the router, and the choice index is the position in that list plus one (0 is None). The table order is saved in sessions, so it is append-only per plugin.
+
 Targets (`ModTarget` in `PluginProcessor.h`; index order is saved in sessions, so append only): 0 None, 1 Chaos, 2 Timing Range, 3 Velocity Chaos, 4 Lerp, 5 Lerp X Mult, 6 Lerp Y Mult, 7 Lerp Z Mult, 8 Density, 9 Gate, 10 Swing, 11 Velocity (rounded), 12 Speed, 13 Tempo (applies only while Host Sync is off), 14 Seed (changes the pattern and melody). Excluded on purpose: Rate, Length, Scale, Root, Octaves and Host Sync.
 
 LFO phase is counted in cycles. Free LFOs accumulate `rate × samples / sampleRate` at the end of each block, so a rate change never jumps the phase, and they keep running when the transport stops. Synced LFOs use `beat / divisionBeats`, where the beat is the sequencer's beat (host or internal), so they hold still when the transport stops. Sample and hold takes its seed from `lfoSeeds` and its cycle index from the unwrapped cycle count.
@@ -268,7 +278,9 @@ Audio: the stereo buffer passes through unchanged (tested).
 
 ## 6. Test architecture
 
-Eight CTest entries run six executables: `CoreDSPTests` (28 test functions), `SuiteUI_Tests` (`SuiteUITests`, 9), `SpectralDriftTests` (13), `DynamicSaturationTests` (10), `MicroTimingChaosTests` (33), and `PluginHostTests`, which has one ctest entry per plugin (3). The README has the full list.
+Nine CTest entries run seven executables: `CoreDSPTests` (29 test functions), `SuiteUI_Tests` (`SuiteUITests`, 9), `SuiteModulation_Tests` (`SuiteModulationTests`, 9), `SpectralDriftTests` (13), `DynamicSaturationTests` (10), `MicroTimingChaosTests` (34), and `PluginHostTests`, which has one ctest entry per plugin (3). The README has the full list.
+
+**Module tests** (`modules/suite_modulation/tests/SuiteModulationTests.cpp`): the router, with a stub processor (no plugin). They cover the routed LFO, the zero case (bit for bit), bipolar amounts, whole-number targets, Host Sync ignoring Tempo, the one-bar period, sample and hold, out-of-range indices, and the control display (values set without notifying). Not covered: the control display skipping a slider the mouse holds, since the test cannot press a mouse button. The panel and scope are checked only by the MicroTimingChaos editor test.
 
 **Assertions.** Every test file starts with `#undef NDEBUG` before `<cassert>`. Release builds (what CI uses) would otherwise compile every `assert` away. Keep this in every new test file.
 
@@ -284,13 +296,13 @@ The Micro-Timing Chaos tests cover the lerp curve (defaults, point editing and o
 
 Test helpers you will use: `setParameter(apvts, id, value)` takes denormalised values. `checkRange` checks the normalisable range and the default. `checkParameterIds` checks the count against `numControls`. `checkStateRoundTrip` saves state, changes a value and restores it. `addSine` adds to a buffer using a global sample index.
 
-Mouse events in tests use the 15-argument `juce::MouseEvent` constructor of JUCE 7.0.9.
+Mouse events in tests use the 15-argument `juce::MouseEvent` constructor, which still compiles on JUCE 9.0.5.
 
 ---
 
 ## 7. Decisions and why
 
-- **JUCE pinned to 7.0.9.** Later versions change APIs and `juce_add_plugin` properties. The macOS job may need 7.0.12 if the pin fails (section 10). `ParameterAttachment::setValueAsCompleteGesture` takes a denormalised value.
+- **JUCE pinned to 9.0.5** (was 7.0.9, then 8.0.6). Major versions change APIs and `juce_add_plugin` properties. The 9.0 changes are in section 11. The macOS job has not been verified on 9.0.5. `ParameterAttachment::setValueAsCompleteGesture` takes a denormalised value.
 - **`suite_ui` is a module, not in the original layout.** Three editors share the same LookAndFeel and widgets. This is an accepted deviation (section 12).
 - **`CoreDSP` is an INTERFACE target linking `juce_dsp`.** The DSP core uses `juce::dsp::FFT`, so it is not JUCE-free.
 - **Spectral engine latency = 2048.** The dry path is delayed by the same amount, so mix stays phase-aligned.
@@ -309,6 +321,8 @@ Mouse events in tests use the 15-argument `juce::MouseEvent` constructor of JUCE
 - **Modulation in normalised space.** An amount of ±100 % sweeps the full range of the target, whatever its scale.
 - **Discrete targets excluded** (Rate, Length, Scale, Root, Octaves, Host Sync). They would change the length or pitch set abruptly. Seed is a target since commit 5eff266: it is read through `modulatedValue`, so a modulated seed changes the pattern and melody.
 - **Tempo modulation applies only while Host Sync is off**, because the host tempo is authoritative when synced.
+- **LFO and routing live in `suite_modulation`.** The `Router` uses target indices, not enums, so any plugin can share it. Each plugin supplies its own target table (`TargetInfo`), with `wholeNumber` and `ignoredWhileHostSync` flags. The plugin's `ModTarget` enum keeps its numbers, which are the saved indices. The shared module reproduces MicroTimingChaos's routing exactly. Phase 4 of `docs/plans/suite-modulation-refactor.md` checked this against the editor render (byte-identical).
+- **The control display is a module class, not editor code.** `ControlDisplay` takes the router and the list of sliders, and it reads Host Sync through the router. Whole-number targets are rounded inside the router, so the display and the sequencer agree.
 - **Modulation applies before the lerp curve**, so a modulated Chaos moves along the curve.
 - **The routing and LFO settings are plain APVTS parameters**, so they automate, save and restore like the rest.
 - **The LFO panel sits at the bottom of the left column, and the window is 980 px tall.** The plan's right-column option left the lerp curve about 100 px high.
@@ -328,6 +342,8 @@ Mouse events in tests use the 15-argument `juce::MouseEvent` constructor of JUCE
 Reason: a static library that links JUCE module targets bundles those module objects into the archive. Each consumer also links the JUCE modules itself, so the link fails with hundreds of duplicate symbols (`juce::Colour`, `JUCEApplicationBase`, `juce_audio_utils`, and so on). A plain `OBJECT` library had the same problem. Compiling the sources directly avoids it. Consumers still link their JUCE modules explicitly. The test executables link `CoreDSP` and `SuiteUI` but not extra JUCE modules, so they do not need them listed.
 
 If you add a new consumer, use `suite_ui_add_to_target`. Do not add `SuiteUI` to `target_link_libraries`.
+
+`suite_modulation` follows the same rule (`suite_modulation_add_to_target`, never `target_link_libraries`). Its panel uses `SuiteUI::LabelledSlider`, so a consumer calls `suite_ui_add_to_target` on the same target first. Its tests are registered in `modules/suite_modulation/CMakeLists.txt` only when `SUITE_BUILD_TESTS` is on, and the directory is added only inside the `SUITE_BUILD_PLUGINS` block.
 
 ---
 
@@ -354,12 +370,22 @@ If you add a new consumer, use `suite_ui_add_to_target`. Do not add `SuiteUI` to
 
 ---
 
+**Adding modulation to a plugin** (from `docs/plans/suite-modulation-refactor.md`, phase 7 procedure)
+1. In the plugin's CMake: `suite_ui_add_to_target` then `suite_modulation_add_to_target`, for the plugin and its test executable.
+2. Declare a `static constexpr SuiteModulation::TargetInfo` table of the controls the routing may move, in ModTarget order, with `wholeNumber` and `ignoredWhileHostSync` where they apply. Append only.
+3. Add `SuiteModulation::Router::addParameters (params, names)` to `createParameterLayout()`, with `names` = `"None"` followed by the target names, in table order.
+4. Construct the router in the processor after `apvts`, with the table and the host sync ID (or `nullptr`). Call `prepare`, `computeOffsets`, `publish` and `advanceBlock` as MicroTimingChaos does. Read each routed control through `modulate`.
+5. The editor builds `SuiteModulation::ModulationPanel` and `ControlDisplay`. Add the plugin's `numControls` and the parameter tests (`checkParameterIds`, `checkRange`).
+6. Record a probe of the unmodulated output before the change, and diff it after. Document the synced-LFO fallback for a plugin with no beat.
+
 ## 10. Open items and known risks
 
 - **MicroTiming DAW load:** the reported failure is not reproduced. JUCE's VST3 host loads and opens it, both before and after the stereo bus change. The remedy applied (stereo pass-through) is a best guess. If it still fails in a DAW, ask for the DAW name, its scanner log, and the exact error.
 - **Spectral Drift feedback range vs cap.** The Feedback range is 0–20 %, but processing caps the value at `maxFeedbackPercent` = 12, so the 12–20 % part of the knob does nothing. Decide whether the range should be 0–12 % or the cap should be raised to 20 %, then update the code, section 4.1, the README and the changelog together.
 - **LFO sampling.** LFOs are evaluated at step times, so an LFO faster than the step rate aliases against the grid. Tempo and Speed are evaluated per block and per step respectively.
 - **Discrete targets not modulated:** Root and Octaves (sample and hold on these is a possible follow-up), and Rate, Length and Scale.
+- **Spectral Drift and Dynamic Saturation have no modulation.** The shared module is ready for them. Adopting it needs the owner's choice of targets (proposed lists in `docs/plans/suite-modulation-refactor.md`, phase 7). Not started.
+- **Module tests do not cover the mouse hold in `ControlDisplay`.** The test cannot press a mouse button. The check is by reading the code only.
 - **Micro-Timing Chaos: plan items not built.** Zoom and pan on the curve view. UI automation tests for point dragging, tab switching, the BPM readout and the help line. The plan's "latency = timing range" (deliberately not built, see section 7).
 - **Micro-Timing Chaos: not exercised live.** The curve's mouse handling (drag, right-click reset, double-click reset) and hover help were written and compiled but not driven in a running host. The editor was checked by rendering it to an image at the default size (1200 × 820). The screenshot check found and fixed a header overlap and a readout collision.
 - **macOS CI** is pinned to `macos-14` with Xcode 15.4. The `macos-latest` image failed to compile JUCE 7.0.9's `juce_gui_basics.mm` while building `juceaide`. The cause is unconfirmed. If the pin fails, move to JUCE 7.0.12 (patch release, same API).
@@ -387,9 +413,9 @@ If you add a new consumer, use `suite_ui_add_to_target`. Do not add `SuiteUI` to
 - `juce::Slider` and `juce::ComboBox` are `SettableTooltipClient`s, so they take `setTooltip`. `juce::Component` takes `setHelpText` and `getHelpText`, which a mouse listener can read from `e.eventComponent`.
 - `juce::Graphics::drawText` takes a `Rectangle<float>` or a `Rectangle<int>`, and `juce::String (float, int)` formats decimals.
 - `juce::MouseEvent` has `isPopupMenu()` for right-click on Windows.
-- `JUCE_PLUGINHOST_VST3` is 0 by default in JUCE 7. It must be 1 to use the VST3 host in a test.
+- `JUCE_PLUGINHOST_VST3` is 0 by default in JUCE 9, as in 7. It must be 1 to use the VST3 host in a test.
 - `MessageManager::runDispatchLoopUntil` exists only when `JUCE_MODAL_LOOPS_PERMITTED` is 1.
-- `juce::MouseEvent` in 7.0.9 takes 15 arguments, with no pen details.
+- `juce::MouseEvent` in 7.0.9 takes 15 arguments, with no pen details. The same 15-argument form compiles in 9.0.5.
 - Clang rejects a nested struct's default member initialiser used as a default argument in its enclosing class. `LorenzState` is at namespace scope for this reason.
 - `juce::File bundle (juce::String (argv[1]));` is a function declaration (most vexing parse). Use braces.
 - Duplicate-symbol link errors with JUCE: see section 8.
@@ -399,6 +425,15 @@ If you add a new consumer, use `suite_ui_add_to_target`. Do not add `SuiteUI` to
 - In JUCE 7.0.9 the text box position is `juce::Slider::TextBoxRight`. `juce::TextEntryBoxPosition::TextBoxRight` does not compile.
 - A baseline for a processing change: build the committed code in a `git worktree` with `-DFETCHCONTENT_SOURCE_DIR_JUCE=<repo>/build/_deps/juce-src` (no re-download), run the same probe there, and diff against the new build.
 - Test failures reported as `Exit code 0xc0000409` with `Assertion failed` are a failed `checkRange` or similar assert. The message names the file and line. Run the executable directly to see the full output.
+- `juce::AudioParameterFloat` with the eight-argument form (label, category, `stringFromValue`, `valueFromString`) is deprecated in JUCE 7.0.9 and 9.0.5. MSVC warns with C4996. The shared router uses it as the MicroTimingChaos layout did. Move to the `Attributes` form when the plugins are next touched.
+- `juce::Component` has `setHelpText`, not `setTooltip`. The editor's help line reads the help text of the component under the pointer, so copy the exact strings when moving a panel.
+- `juce::AudioParameterChoice::choices` is a public member. `getParameter (id)` returns a `juce::RangedAudioParameter*`, so `dynamic_cast` it to read the names.
+- A broken test source blocks the whole build, not just its own tests. `cmake --build` stops at the first failing target, and the other executables then run from stale binaries. Before reporting a green CTest run, check that each test executable was built from the current sources.
+- **JUCE 8 and later: release a `Graphics` before reading its image.** Drawing through a live `juce::Graphics` is not visible in the `juce::Image` until the `Graphics` is destroyed. Reading pixels inside its scope gives zero. JUCE 7 showed the drawing immediately, which is why the SuiteUI paint check passed on 7.0.9 and failed on CI's 8.0.6 (`Assertion failed: painted > 0`, reported as `Exit code 0xc0000409`). Scope the `Graphics` in every test helper that reads pixels.
+- **JUCE 9 editor lifetime.** `AudioProcessor::createEditorIfNeeded()` is deprecated; use `createEditorAndMakeActive()`, which returns nullptr while an editor is active. Before an editor that the test owns is destroyed, call `processor.editorBeingDeleted (editor.get())`. A host's wrapper does this, and `checkEditor` in `tests/common/PluginTestUtils.h` does it too.
+- **JUCE 9 removed APIs:** `AudioPluginFormatManager::addDefaultFormats()` (add `juce::VST3PluginFormat` directly); `Drawable::createFromSVG (XmlElement)` (use `createFromSVGString`); `Font::getStringWidthFloat` (use `juce::GlyphArrangement::getStringWidth (font, text)`).
+- **JUCE 9 splits the audio processor code** into `juce_audio_processors_headless` (no GUI) and `juce_audio_processors`. The plugins and tests still link `juce_audio_processors`, which is correct.
+- **Changing the JUCE tag does not refresh an existing checkout.** FetchContent keeps `build/_deps/juce-src` at its old version. After a version change, delete `build/_deps/juce-src` (or the whole build directory) and reconfigure, then check `JUCE_MAJOR_VERSION` in `juce_StandardHeader.h`. A stale checkout built silently against 7.0.9 when the pin said 9.0.5.
 
 ---
 
@@ -421,6 +456,7 @@ The original brief (`coding_agent_prompt.md`) is no longer in the repository. Th
 | Output spectrum on the display | Measured on finished output (one frame behind) | Shows the real overlap-add result |
 | Micro-Timing: LFO panel in the right column, window 940 px (plan, D9) | LFO panel at the bottom of the left column, window 980 px | The right column had no room for a lerp curve |
 | Micro-Timing: LFO and routing as APVTS parameters (plan) | 26 new parameters, `numControls` 46 | The plan's design; sessions save them |
+| Shared LFO and routing module (refactor plan) | `ControlDisplay` takes the router and the slider list, with no APVTS argument. The router reads Host Sync itself. The panel uses `SuiteUI::LabelledSlider`, so it needs SuiteUI in the same target | The router already knows the target table and Host Sync. A second copy of the sync flag would be a second source of truth |
 
 ---
 

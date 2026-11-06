@@ -32,7 +32,8 @@ int main (int argc, char** argv)
     juce::ScopedJuceInitialiser_GUI gui;
 
     juce::AudioPluginFormatManager formats;
-    formats.addDefaultFormats();
+    // JUCE 9 removed AudioPluginFormatManager::addDefaultFormats(). The host only needs VST3.
+    formats.addFormat (std::make_unique<juce::VST3PluginFormat>());
 
     juce::OwnedArray<juce::PluginDescription> types;
 

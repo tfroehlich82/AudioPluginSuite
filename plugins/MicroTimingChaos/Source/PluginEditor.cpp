@@ -386,6 +386,26 @@ MicroTimingChaosEditor::MicroTimingChaosEditor (MicroTimingChaosProcessor& p)
     syncAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
         apvts, MicroTimingChaosProcessor::syncId, syncButton);
 
+    // Each control that the routing can move, and the target it shows. Whole-number targets are rounded by the router.
+    using Target = MicroTimingChaosProcessor::ModTarget;
+    controls = std::make_unique<SuiteModulation::ControlDisplay> (processor.getRouter(),
+        std::vector<SuiteModulation::ControlDisplay::Entry> {
+            { chaosSlider.slider,         (int) Target::Chaos },
+            { timingRangeSlider.slider,   (int) Target::TimingRange },
+            { velocityChaosSlider.slider, (int) Target::VelocityChaos },
+            { lerpSlider.slider,          (int) Target::Lerp },
+            { lerpXMultSlider.slider,     (int) Target::LerpX },
+            { lerpYMultSlider.slider,     (int) Target::LerpY },
+            { lerpZMultSlider.slider,     (int) Target::LerpZ },
+            { densitySlider.slider,       (int) Target::Density },
+            { gateSlider.slider,          (int) Target::Gate },
+            { swingSlider.slider,         (int) Target::Swing },
+            { velocitySlider.slider,      (int) Target::Velocity },
+            { speedSlider.slider,         (int) Target::Speed },
+            { tempoSlider.slider,         (int) Target::Tempo },
+            { seedSlider.slider,          (int) Target::Seed },
+        });
+
     startTimerHz (60);
 }
 
@@ -438,7 +458,7 @@ void MicroTimingChaosEditor::paint (juce::Graphics& g)
     float right = header.getRight();
     for (int i = 2; i >= 0; --i)
     {
-        const float width = legendFont.getStringWidthFloat (legend[i].text) + 8.0f;
+        const float width = juce::GlyphArrangement::getStringWidth (legendFont, legend[i].text) + 8.0f;
         g.setColour (legend[i].colour);
         g.drawText (legend[i].text, juce::Rectangle<float> (right - width, header.getY(), width, header.getHeight()),
                     juce::Justification::centredRight);
@@ -561,41 +581,12 @@ void MicroTimingChaosEditor::resized()
     hostTempoLabel.setBounds (transportInner.removeFromTop (24).withSizeKeepingCentre (280, 24));
 }
 
-void MicroTimingChaosEditor::showModulatedValues()
+SuiteModulation::ModulationPanel::Style MicroTimingChaosEditor::modulationStyle()
 {
-    using Target = MicroTimingChaosProcessor::ModTarget;
+    namespace Palette = MicroTimingChaos::Palette;
 
-    // Each control that the routing can move. Whole-number parameters are rounded for display.
-    struct Shown { juce::Slider& slider; const char* parameterId; Target target; bool whole; };
-    const Shown shown[] = {
-        { chaosSlider.slider,         MicroTimingChaosProcessor::chaosId,         Target::Chaos,         false },
-        { timingRangeSlider.slider,   MicroTimingChaosProcessor::timingRangeId,   Target::TimingRange,   false },
-        { velocityChaosSlider.slider, MicroTimingChaosProcessor::velocityChaosId, Target::VelocityChaos, false },
-        { lerpSlider.slider,          MicroTimingChaosProcessor::lerpId,          Target::Lerp,          false },
-        { lerpXMultSlider.slider,     MicroTimingChaosProcessor::lerpXMultId,     Target::LerpX,         false },
-        { lerpYMultSlider.slider,     MicroTimingChaosProcessor::lerpYMultId,     Target::LerpY,         false },
-        { lerpZMultSlider.slider,     MicroTimingChaosProcessor::lerpZMultId,     Target::LerpZ,         false },
-        { densitySlider.slider,       MicroTimingChaosProcessor::densityId,       Target::Density,       false },
-        { gateSlider.slider,          MicroTimingChaosProcessor::gateId,          Target::Gate,          false },
-        { swingSlider.slider,         MicroTimingChaosProcessor::swingId,         Target::Swing,         false },
-        { velocitySlider.slider,      MicroTimingChaosProcessor::baseVelocityId,  Target::Velocity,      true  },
-        { speedSlider.slider,         MicroTimingChaosProcessor::speedId,         Target::Speed,         false },
-        { tempoSlider.slider,         MicroTimingChaosProcessor::bpmId,           Target::Tempo,         false },
-        { seedSlider.slider,          MicroTimingChaosProcessor::seedId,          Target::Seed,          true  },
-    };
-
-    for (const auto& entry : shown)
-    {
-        // While the user drags a control, the displayed value is theirs; the modulation resumes on release.
-        if (entry.slider.isMouseButtonDown())
-            continue;
-
-        float value = processor.getModulatedValue (entry.target, entry.parameterId);
-        if (entry.whole)
-            value = (float) juce::roundToInt (value);
-
-        entry.slider.setValue (value, juce::dontSendNotification);
-    }
+    return { { juce::Colours::purple, juce::Colours::orange },
+             Palette::text, Palette::textDim, Palette::panel, Palette::track };
 }
 
 void MicroTimingChaosEditor::timerCallback()
@@ -625,7 +616,7 @@ void MicroTimingChaosEditor::timerCallback()
 
     // The marker follows the modulated chaos, so it matches what the sequencer uses.
     curveEditor.setChaosValue (processor.getModulatedValue (MicroTimingChaosProcessor::ModTarget::Chaos, MicroTimingChaosProcessor::chaosId) / 100.0f);
-    showModulatedValues();
+    controls->update();
     lerpPreview.refresh (processor.getRecentSteps(), processor.getDriftAmounts(), rootValue, timingValue);
 
     // Tempo: follows the host when BPM Sync is on

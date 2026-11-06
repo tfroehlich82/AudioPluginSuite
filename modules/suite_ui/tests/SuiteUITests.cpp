@@ -23,8 +23,12 @@ namespace
         component.setBounds (0, 0, width, height);
 
         juce::Image image (juce::Image::ARGB, width, height, true);
-        juce::Graphics g (image);
-        component.paintEntireComponent (g, true);
+
+        // The Graphics must be released before the pixels are read. JUCE 9 does not make the drawing visible in the image until then.
+        {
+            juce::Graphics g (image);
+            component.paintEntireComponent (g, true);
+        }
 
         int visible = 0;
         for (int y = 0; y < height; ++y)
@@ -184,8 +188,11 @@ namespace
         component.setBounds (0, 0, width, height);
 
         juce::Image image (juce::Image::ARGB, width, height, true);
-        juce::Graphics g (image);
-        component.paintEntireComponent (g, true);
+
+        {
+            juce::Graphics g (image);
+            component.paintEntireComponent (g, true);
+        }
 
         int count = 0;
 

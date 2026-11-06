@@ -25,10 +25,6 @@ set(MICRO_TIMING_CHAOS_SOURCES
     Source/LerpCurveEditor.h
     Source/LerpPreview.cpp
     Source/LerpPreview.h
-    Source/LfoScope.cpp
-    Source/LfoScope.h
-    Source/ModulationPanel.cpp
-    Source/ModulationPanel.h
     Source/MicroTimingChaosLookAndFeel.cpp
 )
 
@@ -50,6 +46,7 @@ target_include_directories(MicroTimingChaos PRIVATE
 )
 
 suite_ui_add_to_target(MicroTimingChaos)
+suite_modulation_add_to_target(MicroTimingChaos)
 
 target_link_libraries(MicroTimingChaos PRIVATE
     CoreDSP
@@ -75,6 +72,7 @@ if(SUITE_BUILD_TESTS)
     )
 
     suite_ui_add_to_target(MicroTimingChaosTests)
+    suite_modulation_add_to_target(MicroTimingChaosTests)
 
     # The editor tests pump the message loop so timers fire.
     target_compile_definitions(MicroTimingChaosTests PRIVATE JUCE_MODAL_LOOPS_PERMITTED=1)

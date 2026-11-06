@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `modules/suite_modulation`: a shared module with the two LFOs, six routing slots, the LFO scope, the modulation panel and the control display, for plugins to reuse. Its tests (`SuiteModulationTests`, 9) run as a new CTest entry.
+- `tests/common/ModulationTestUtils.h`: `setLfo`, `setRoute` and `timingOffsets` for any processor with the shared LFO parameters.
+- `modules/core_dsp/include/ModulationTiming.h`: the division table, `fractionalPart` and `cyclesFromSeconds`, with DSP tests.
 - Spectral Drift Shifter: fourteen controls in total. Drift Depth, Bin Spread, Stereo Phase, LFO Shape (sine, triangle, saw, square), Spectral Shift (±32 bins), Spectral Tilt (±2), Spectral Gate, Feedback Damping, Drift Start and Output Gain.
 - Dynamic Saturation Companion: thirteen controls. Attack, Release, Detect HPF, Stereo Link, Tube Bias, Fold, Tone and Envelope Curve are new.
 - Dynamic Saturation Companion now runs its shaper at 2× oversampling. The latency is reported to the host.
@@ -29,6 +32,8 @@ All notable changes to this project are documented here. The format follows
 - GNU GPL v3 licence (`LICENSE`).
 
 ### Changed
+- JUCE upgraded from 7.0.9 to 9.0.5, the latest stable release. The Micro-Timing Chaos sources used `Drawable::createFromSVG`, `Font::getStringWidthFloat` and the removed `addDefaultFormats`, and were updated for the new API. The test helpers now release the `Graphics` before reading pixels, and hand the editor back to the processor before it is destroyed.
+- The LFO and control assignment code of Micro-Timing Chaos moved to the shared `suite_modulation` module. The LFO panel, the LFO scope and the routing now come from the module, and the plugin's own copies are gone. No change to sound, parameters, defaults or saved sessions. The editor renders byte-identically before and after.
 - Spectral Drift Shifter: the Feedback control runs from 0 to 20 %. Processing still caps the feedback at 12 %, so values above 12 % act as 12 %.
 - Spectral Drift Shifter: Bin Spread is 0 to 1 rad (was 0 to 0.5), Spectral Shift is ±32 bins (was ±16), and Spectral Tilt is ±2 (was ±1).
 - Spectral Drift Shifter: the preview says "Waiting for audio" until signal arrives, and has frequency labels. Before, a silent input left the panel blank with nothing to explain it.
@@ -46,6 +51,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- `SuiteUI_Tests` failed on the Windows CI runner. The paint checks read the pixels while their `Graphics` was still alive, which JUCE 8 and later do not flush. The checks now release the `Graphics` first, and the test passes on JUCE 8.0.6 and 9.0.5.
 - Micro-Timing Chaos Sequencer: the Random and Noise LFO shapes are smooth random curves (value noise) instead of a line and a zigzag.
 - Micro-Timing Chaos Sequencer: the step view showed the pattern for the base Density, Seed and Timing Range, and not the modulated values or the density curve the sequencer uses. It now shows the pattern that plays.
 - Dynamic Saturation Companion: the output is held to ±1 before the output level, so oversampler and tone overshoot cannot exceed the stage ceiling.

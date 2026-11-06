@@ -15,7 +15,7 @@ set(JUCE_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
     JUCE
     GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
-    GIT_TAG        7.0.9
+    GIT_TAG        9.0.5
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(JUCE)
@@ -41,7 +41,9 @@ if(SUITE_BUILD_TESTS OR SUITE_BUILD_PLUGINS)
 endif()
 
 if(SUITE_BUILD_PLUGINS)
+    include(${CMAKE_SOURCE_DIR}/modules/suite_modulation/suite_modulation.cmake)
     include(${CMAKE_SOURCE_DIR}/modules/suite_ui/SuiteUI.cmake)
+    add_subdirectory(modules/suite_modulation)
     add_subdirectory(modules/suite_ui)
     add_subdirectory(plugins/SpectralDrift)
     add_subdirectory(plugins/DynamicSaturation)

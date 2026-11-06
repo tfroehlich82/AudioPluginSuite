@@ -82,7 +82,7 @@ namespace PluginTest
     {
         assert (processor.hasEditor());
 
-        std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditorIfNeeded());
+        std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditorAndMakeActive());
         assert (editor != nullptr);
         assert (editor->getWidth() > 0 && editor->getHeight() > 0);
 
@@ -92,6 +92,10 @@ namespace PluginTest
         juce::Image image (juce::Image::ARGB, editor->getWidth(), editor->getHeight(), true);
         juce::Graphics g (image);
         editor->paintEntireComponent (g, true);
+
+        // JUCE 9 requires the processor to forget the editor before it is destroyed. A host does this
+        // through the wrapper. Without it, the next createEditorAndMakeActive() returns nullptr.
+        processor.editorBeingDeleted (editor.get());
     }
 
     inline bool allFinite (const juce::AudioBuffer<float>& buffer)
